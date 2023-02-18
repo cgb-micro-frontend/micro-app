@@ -1,6 +1,6 @@
 import type { SandBoxAdapter, AppInterface } from '@micro-app/types'
-import globalEnv from '../libs/global_env'
-import { defer, rawDefineProperty } from '../libs/utils'
+import globalEnv from '../../libs/global_env'
+import { defer, rawDefineProperty } from '../../libs/utils'
 
 export default class Adapter implements SandBoxAdapter {
   constructor () {

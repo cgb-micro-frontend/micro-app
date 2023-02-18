@@ -2,6 +2,8 @@
   <div>
     <p>page2</p>
     <div class="test-btn-vite">test</div>
+    <router-link to="/page3">Go to Page3</router-link>
+    <br/>
     <router-link to="/">Go to Home</router-link>
   </div>
 </template>

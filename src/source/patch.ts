@@ -15,6 +15,10 @@ import {
   isElement,
   isNode,
   rawDefineProperty,
+  isLinkElement,
+  isStyleElement,
+  isScriptElement,
+  isIFrameElement,
 } from '../libs/utils'
 import scopedCSS from '../sandbox/scoped_css'
 import { extractLinkFromHtml, formatDynamicLink } from './links'
@@ -27,7 +31,7 @@ import {
 } from './scripts'
 import microApp from '../micro_app'
 import globalEnv from '../libs/global_env'
-import { fixReactHMRConflict } from '../sandbox/adapter'
+import { fixReactHMRConflict } from '../sandbox/with/adapter'
 
 // Record element and map element
 const dynamicElementInMicroAppMap = new WeakMap<Node, Element | Comment>()
@@ -39,7 +43,7 @@ const dynamicElementInMicroAppMap = new WeakMap<Node, Element | Comment>()
  * @param app app
  */
 function handleNewNode (parent: Node, child: Node, app: AppInterface): Node {
-  if (child instanceof HTMLStyleElement) {
+  if (isStyleElement(child)) {
     if (child.hasAttribute('exclude')) {
       const replaceComment = document.createComment('style element with exclude attribute ignored by micro-app')
       dynamicElementInMicroAppMap.set(child, replaceComment)
@@ -48,7 +52,7 @@ function handleNewNode (parent: Node, child: Node, app: AppInterface): Node {
       return scopedCSS(child, app)
     }
     return child
-  } else if (child instanceof HTMLLinkElement) {
+  } else if (isLinkElement(child)) {
     if (child.hasAttribute('exclude') || checkExcludeUrl(child.getAttribute('href'), app.name)) {
       const linkReplaceComment = document.createComment('link element with exclude attribute ignored by micro-app')
       dynamicElementInMicroAppMap.set(child, linkReplaceComment)
@@ -82,7 +86,7 @@ function handleNewNode (parent: Node, child: Node, app: AppInterface): Node {
     }
 
     return child
-  } else if (child instanceof HTMLScriptElement) {
+  } else if (isScriptElement(child)) {
     if (
       child.src &&
       isFunction(microApp.options.excludeAssetFilter) &&
@@ -129,7 +133,8 @@ function invokePrototypeMethod (
   targetChild: Node,
   passiveChild?: Node | null,
 ): any {
-  const hijackParent = getHijackParent(parent, app)
+  const hijackParent = getHijackParent(parent, targetChild, app)
+  // console.log(8888888, hijackParent, targetChild, targetChild.__MICRO_APP_NAME__)
   /**
    * If passiveChild is not the child node, insertBefore replaceChild will have a problem, at this time, it will be degraded to appendChild
    * E.g: document.head.insertBefore(targetChild, document.head.childNodes[0])
@@ -170,7 +175,7 @@ function invokePrototypeMethod (
 
     if (
       __DEV__ &&
-      targetChild instanceof HTMLIFrameElement &&
+      isIFrameElement(targetChild) &&
       rawMethod === globalEnv.rawAppendChild
     ) {
       fixReactHMRConflict(app)
@@ -183,12 +188,24 @@ function invokePrototypeMethod (
 }
 
 // head/body map to micro-app-head/micro-app-body
-function getHijackParent (node: Node, app: AppInterface): HTMLElement | null | undefined {
-  if (node === document.head) {
-    return app?.querySelector<HTMLElement>('micro-app-head')
-  }
-  if (node === document.body) {
-    return app?.querySelector<HTMLElement>('micro-app-body')
+function getHijackParent (
+  parent: Node,
+  targetChild: Node,
+  app: AppInterface,
+): HTMLElement | null | undefined {
+  if (app) {
+    if (parent === document.head) {
+      if (app.iframe && isScriptElement(targetChild)) {
+        return app.sandBox.microHead
+      }
+      return app.querySelector<HTMLElement>('micro-app-head')
+    }
+    if (parent === document.body || parent === document.body.parentNode) {
+      if (app.iframe && isScriptElement(targetChild)) {
+        return app.sandBox.microBody
+      }
+      return app.querySelector<HTMLElement>('micro-app-body')
+    }
   }
   return null
 }
@@ -231,9 +248,10 @@ function commonElementHandler (
   const currentAppName = getCurrentAppName()
   if (
     isNode(newChild) &&
+    !newChild.__PURE_ELEMENT__ &&
     (
       newChild.__MICRO_APP_NAME__ ||
-      (currentAppName && !newChild.__PURE_ELEMENT__)
+      currentAppName
     )
   ) {
     newChild.__MICRO_APP_NAME__ = newChild.__MICRO_APP_NAME__ || currentAppName!
@@ -282,7 +300,7 @@ function commonElementHandler (
 /**
  * Rewrite element prototype method
  */
-export function patchElementPrototypeMethods (): void {
+export function patchElementAndDocument (): void {
   patchDocument()
 
   // prototype methods of add element👇
@@ -370,6 +388,8 @@ export function patchElementPrototypeMethods (): void {
   }
 
   rawDefineProperty(Element.prototype, 'innerHTML', {
+    configurable: true,
+    enumerable: true,
     get () {
       return globalEnv.rawInnerHTMLDesc.get.call(this)
     },
@@ -579,7 +599,7 @@ function releasePatchDocument (): void {
 }
 
 // release patch
-export function releasePatches (): void {
+export function releasePatchElementAndDocument (): void {
   removeDomScope()
   releasePatchDocument()
 

@@ -36,6 +36,7 @@ function React17 () {
         onMounted={() => hideLoading(false)}
         // destroy
         // inline
+        // keep-alive
       />
     </div>
   )

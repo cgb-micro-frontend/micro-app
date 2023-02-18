@@ -6,7 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite App</title>
     <script>
-      console.log('common script in vite')
+      console.log('普通的内联script元素', window)
+
+      window.addEventListener('popstate', (e) => {
+        console.log('子应用 popstate', 'state:', e.state)
+      }, false)
+
+      window.onhashchange = (e) => {
+        console.log('子应用 onhashchange', e)
+      }
+    </script>
+    <script type="module">
+      console.log('我不应该执行2遍', '22222222222')
     </script>
   </head>
   <body>

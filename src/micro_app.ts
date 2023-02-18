@@ -27,7 +27,7 @@ import { EventCenterForBaseApp } from './interact'
 import { initGlobalEnv } from './libs/global_env'
 import { appInstanceMap } from './create_app'
 import { appStates, keepAliveStates, lifeCycles } from './constants'
-import { router } from './sandbox'
+import { router } from './sandbox/router'
 
 /**
  * if app not prefetch & not unmount, then app is active

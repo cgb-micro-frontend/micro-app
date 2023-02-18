@@ -1,7 +1,7 @@
 import type { lifeCyclesType } from '@micro-app/types'
 import microApp from '../micro_app'
 import { logError, isFunction, removeDomScope, getRootContainer, assign } from '../libs/utils'
-import { formatEventName } from '../sandbox/effect'
+import { formatEventName } from '../sandbox/with/effect'
 
 function formatEventInfo (event: CustomEvent, element: HTMLElement): void {
   Object.defineProperties(event, {

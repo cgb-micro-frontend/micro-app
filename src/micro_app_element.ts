@@ -28,7 +28,7 @@ import { patchSetAttribute } from './source/patch'
 import microApp from './micro_app'
 import dispatchLifecyclesEvent from './interact/lifecycles_event'
 import globalEnv from './libs/global_env'
-import { getNoHashMicroPathFromURL, router } from './sandbox'
+import { getNoHashMicroPathFromURL, router } from './sandbox/with'
 
 /**
  * define element
@@ -356,6 +356,7 @@ export function defineElement (tagName: string): void {
         useSandbox: this.isSandbox(),
         inline: this.getDisposeResult('inline'),
         esmodule: this.getDisposeResult('esmodule'),
+        iframe: this.getDisposeResult('iframe'),
         container: this.shadowRoot ?? this,
         ssrUrl: this.ssrUrl,
       })
@@ -433,11 +434,11 @@ export function defineElement (tagName: string): void {
      * @param name Configuration item name
      */
     private getDisposeResult <T extends keyof OptionsType> (name: T): boolean {
-      return (this.compatibleSpecialProperties(name) || !!microApp.options[name]) && this.compatibleDisableSpecialProperties(name)
+      return (this.compatibleProperties(name) || !!microApp.options[name]) && this.compatibleDisableProperties(name)
     }
 
     // compatible of disableScopecss & disableSandbox
-    private compatibleSpecialProperties (name: string): boolean {
+    private compatibleProperties (name: string): boolean {
       if (name === 'disable-scopecss') {
         return this.hasAttribute('disable-scopecss') || this.hasAttribute('disableScopecss')
       } else if (name === 'disable-sandbox') {
@@ -447,7 +448,7 @@ export function defineElement (tagName: string): void {
     }
 
     // compatible of disableScopecss & disableSandbox
-    private compatibleDisableSpecialProperties (name: string): boolean {
+    private compatibleDisableProperties (name: string): boolean {
       if (name === 'disable-scopecss') {
         return this.getAttribute('disable-scopecss') !== 'false' && this.getAttribute('disableScopecss') !== 'false'
       } else if (name === 'disable-sandbox') {

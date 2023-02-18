@@ -97,6 +97,7 @@ function preFetchAction (options: prefetchParam): Promise<void> {
           useSandbox: !(options['disable-sandbox'] ?? options.disableSandbox ?? microApp.options['disable-sandbox']),
           inline: options.inline ?? microApp.options.inline,
           esmodule: options.esmodule ?? microApp.options.esmodule,
+          iframe: options.iframe ?? microApp.options.iframe,
           prefetchLevel: options.level && PREFETCH_LEVEL.includes(options.level) ? options.level : microApp.options.prefetchLevel && PREFETCH_LEVEL.includes(microApp.options.prefetchLevel) ? microApp.options.prefetchLevel : 2,
         })
 

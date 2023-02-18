@@ -1,15 +1,16 @@
 /* eslint-disable no-void */
-import type { MicroLocation, GuardLocation, ShadowLocation } from '@micro-app/types'
+import type { MicroLocation, GuardLocation, microAppWindowType } from '@micro-app/types'
 import globalEnv from '../../libs/global_env'
-import { assign as oAssign, rawDefineProperties, createURL, noop } from '../../libs/utils'
-import { setMicroPathToURL, isEffectiveApp } from './core'
+import { assign as oAssign, createURL, rawDefineProperty } from '../../libs/utils'
+import { setMicroPathToURL, isEffectiveApp, isIframeSandbox, getMicroState } from './core'
 import { dispatchNativeEvent } from './event'
 import { executeNavigationGuard } from './api'
 import { nativeHistoryNavigate, navigateWithNativeEvent } from './history'
+import { appInstanceMap } from '../../create_app'
+import { hijackMicroLocationKeys } from '../iframe/special_key'
 
-const shadowLocationKeys: ReadonlyArray<keyof MicroLocation> = ['href', 'pathname', 'search', 'hash']
 // origin is readonly, so we ignore when updateMicroLocation
-const locationKeys: ReadonlyArray<keyof MicroLocation> = [...shadowLocationKeys, 'host', 'hostname', 'port', 'protocol', 'search']
+const locationKeys: ReadonlyArray<keyof MicroLocation> = ['href', 'pathname', 'search', 'hash', 'host', 'hostname', 'port', 'protocol', 'search']
 // origin, fullPath is necessary for guardLocation
 const guardLocationKeys: ReadonlyArray<keyof MicroLocation> = [...locationKeys, 'origin', 'fullPath']
 
@@ -18,18 +19,34 @@ const guardLocationKeys: ReadonlyArray<keyof MicroLocation> = [...locationKeys, 
  * MDN https://developer.mozilla.org/en-US/docs/Web/API/Location
  * @param appName app name
  * @param url app url
+ * @param microAppWindow iframeWindow, iframe only
+ * @param childStaticLocation real child location info, iframe only
+ * @param browserHost host of browser, iframe only
+ * @param childHost host of child app, iframe only
  */
-export function createMicroLocation (appName: string, url: string): MicroLocation {
+export function createMicroLocation (
+  appName: string,
+  url: string,
+  microAppWindow?: microAppWindowType,
+  childStaticLocation?: MicroLocation,
+  browserHost?: string,
+  childHost?: string,
+): MicroLocation {
   const rawWindow = globalEnv.rawWindow
   const rawLocation = rawWindow.location
-  // microLocation is the location of child app, it is globally unique
-  const microLocation = createURL(url)
-  // shadowLocation is the current location information (href, pathname, search, hash)
-  const shadowLocation: ShadowLocation = {
-    href: microLocation.href,
-    pathname: microLocation.pathname,
-    search: microLocation.search,
-    hash: microLocation.hash,
+  const isIframe = !!microAppWindow
+  /**
+   * withLocation is microLocation for with sandbox
+   * it is globally unique for child app
+   */
+  const withLocation = createURL(url)
+
+  /**
+   * In iframe, jump through raw iframeLocation will cause microAppWindow.location reset
+   * So we get location dynamically
+   */
+  function getTarget (): MicroLocation {
+    return isIframe ? microAppWindow.location : withLocation
   }
 
   /**
@@ -39,10 +56,10 @@ export function createMicroLocation (appName: string, url: string): MicroLocatio
    * @param methodName pushState/replaceState
    * @returns origin value or formatted value
    */
-  const commonHandler = (value: string | URL, methodName: string): string | URL | void => {
-    const targetLocation = createURL(value, microLocation.href)
+  function commonHandler (value: string | URL, methodName: string): string | URL | void {
+    const targetLocation = createURL(value, proxyLocation.href)
     // Even if the origin is the same, developers still have the possibility of want to jump to a new page
-    if (targetLocation.origin === microLocation.origin) {
+    if (targetLocation.origin === proxyLocation.origin) {
       const setMicroPathResult = setMicroPathToURL(appName, targetLocation)
       /**
        * change hash with location.href will not trigger the browser reload
@@ -52,11 +69,11 @@ export function createMicroLocation (appName: string, url: string): MicroLocatio
        *    2. if address is same and has hash, it should not add route stack
        */
       if (
-        targetLocation.pathname === shadowLocation.pathname &&
-        targetLocation.search === shadowLocation.search
+        targetLocation.pathname === proxyLocation.pathname &&
+        targetLocation.search === proxyLocation.search
       ) {
         let oldHref = null
-        if (targetLocation.hash !== shadowLocation.hash) {
+        if (targetLocation.hash !== proxyLocation.hash) {
           if (setMicroPathResult.isAttach2Hash) oldHref = rawLocation.href
           nativeHistoryNavigate(appName, methodName, setMicroPathResult.fullPath)
         }
@@ -64,40 +81,23 @@ export function createMicroLocation (appName: string, url: string): MicroLocatio
         if (targetLocation.hash) {
           dispatchNativeEvent(appName, false, oldHref)
         } else {
-          rawReload()
+          reload()
         }
         return void 0
       /**
        * when baseApp is hash router, address change of child can not reload browser
-       * so we imitate behavior of browser (reload)
+       * so we imitate behavior of browser (reload) manually
        */
       } else if (setMicroPathResult.isAttach2Hash) {
         nativeHistoryNavigate(appName, methodName, setMicroPathResult.fullPath)
-        rawReload()
+        reload()
         return void 0
       }
 
-      value = setMicroPathResult.fullPath
+      return setMicroPathResult.fullPath
     }
 
     return value
-  }
-
-  /**
-   * create location PropertyDescriptor (href, pathname, search, hash)
-   * @param key property name
-   * @param setter setter of location property
-   */
-  function createPropertyDescriptor (
-    getter: () => string,
-    setter: (v: string) => void,
-  ): PropertyDescriptor {
-    return {
-      enumerable: true,
-      configurable: true,
-      get: getter,
-      set: setter,
-    }
   }
 
   /**
@@ -105,10 +105,10 @@ export function createMicroLocation (appName: string, url: string): MicroLocatio
    * @param targetPath target fullPath
    * @param key pathname/search
    */
-  function handleForPathNameAndSearch (targetPath: string, key: string): void {
+  function handleForPathNameAndSearch (targetPath: string, key: keyof Location): void {
     const targetLocation = createURL(targetPath, url)
     // When the browser url has a hash value, the same pathname/search will not refresh browser
-    if (targetLocation[key] === shadowLocation[key] && shadowLocation.hash) {
+    if (targetLocation[key] === proxyLocation[key] && proxyLocation.hash) {
       // The href has not changed, not need to dispatch hashchange event
       dispatchNativeEvent(appName, false)
     } else {
@@ -120,88 +120,109 @@ export function createMicroLocation (appName: string, url: string): MicroLocatio
        */
       nativeHistoryNavigate(
         appName,
-        targetLocation[key] === shadowLocation[key] ? 'replaceState' : 'pushState',
+        targetLocation[key] === proxyLocation[key] ? 'replaceState' : 'pushState',
         setMicroPathToURL(appName, targetLocation).fullPath,
       )
-      rawReload()
+      reload()
     }
   }
-
-  function rawReload () {
-    isEffectiveApp(appName) && rawLocation.reload()
-  }
-
-  /**
-   * Special processing for four keys: href, pathname, search and hash
-   * They take values from shadowLocation, and require special operations when assigning values
-   */
-  rawDefineProperties(microLocation, {
-    href: createPropertyDescriptor(
-      (): string => shadowLocation.href,
-      (value: string): void => {
-        if (isEffectiveApp(appName)) {
-          const targetPath = commonHandler(value, 'pushState')
-          if (targetPath) rawLocation.href = targetPath
-        }
-      }
-    ),
-    pathname: createPropertyDescriptor(
-      (): string => shadowLocation.pathname,
-      (value: string): void => {
-        const targetPath = ('/' + value).replace(/^\/+/, '/') + shadowLocation.search + shadowLocation.hash
-        handleForPathNameAndSearch(targetPath, 'pathname')
-      }
-    ),
-    search: createPropertyDescriptor(
-      (): string => shadowLocation.search,
-      (value: string): void => {
-        const targetPath = shadowLocation.pathname + ('?' + value).replace(/^\?+/, '?') + shadowLocation.hash
-        handleForPathNameAndSearch(targetPath, 'search')
-      }
-    ),
-    hash: createPropertyDescriptor(
-      (): string => shadowLocation.hash,
-      (value: string): void => {
-        const targetPath = shadowLocation.pathname + shadowLocation.search + ('#' + value).replace(/^#+/, '#')
-        const targetLocation = createURL(targetPath, url)
-        // The same hash will not trigger popStateEvent
-        if (targetLocation.hash !== shadowLocation.hash) {
-          navigateWithNativeEvent(
-            appName,
-            'pushState',
-            setMicroPathToURL(appName, targetLocation),
-            false,
-          )
-        }
-      }
-    ),
-    fullPath: createPropertyDescriptor(
-      (): string => shadowLocation.pathname + shadowLocation.search + shadowLocation.hash,
-      noop,
-    ),
-  })
 
   const createLocationMethod = (locationMethodName: string) => {
     return function (value: string | URL) {
       if (isEffectiveApp(appName)) {
         const targetPath = commonHandler(value, locationMethodName === 'assign' ? 'pushState' : 'replaceState')
-        if (targetPath) rawLocation[locationMethodName](targetPath)
+        if (targetPath) {
+          // Same as href, complete targetPath with browser origin in vite env
+          rawLocation[locationMethodName](createURL(targetPath, rawLocation.origin).href)
+        }
       }
     }
   }
 
-  return oAssign(microLocation, {
-    assign: createLocationMethod('assign'),
-    replace: createLocationMethod('replace'),
-    reload: (forcedReload?: boolean): void => rawLocation.reload(forcedReload),
-    shadowLocation,
+  const assign = createLocationMethod('assign')
+  const replace = createLocationMethod('replace')
+  const reload = (forcedReload?: boolean): void => rawLocation.reload(forcedReload)
+
+  rawDefineProperty(getTarget(), 'fullPath', {
+    enumerable: true,
+    configurable: true,
+    get: () => proxyLocation.pathname + proxyLocation.search + proxyLocation.hash,
   })
+
+  /**
+   * location.assign/replace is readonly, cannot be proxy, so we use empty object as proxy target
+   */
+  const proxyLocation = new Proxy({} as Location, {
+    get: (_: Location, key: string): unknown => {
+      const target = getTarget()
+      if (isIframe) {
+        // host hostname port protocol
+        if (hijackMicroLocationKeys.includes(key)) {
+          return childStaticLocation![key]
+        }
+
+        if (key === 'href') {
+          // do not use target, because target may be deleted
+          return target[key].replace(browserHost!, childHost!)
+        }
+      }
+
+      if (key === 'assign') return assign
+      if (key === 'replace') return replace
+      if (key === 'reload') return reload
+      if (key === 'self') return target
+
+      return Reflect.get(target, key)
+    },
+    set: (_: Location, key: string, value: string): boolean => {
+      if (isEffectiveApp(appName)) {
+        const target = getTarget()
+        if (key === 'href') {
+          const targetPath = commonHandler(value, 'pushState')
+          /**
+           * In vite, targetPath without origin will be completed with child origin
+           * So we use browser origin to complete targetPath to avoid this problem
+           * But, why child app can affect browser jump?
+           * Guess(need check):
+           *  1. vite records the origin when init
+           *  2. listen for browser jump and automatically complete the address
+           */
+          if (targetPath) {
+            rawLocation.href = createURL(targetPath, rawLocation.origin).href
+          }
+        } else if (key === 'pathname') {
+          const targetPath = ('/' + value).replace(/^\/+/, '/') + proxyLocation.search + proxyLocation.hash
+          handleForPathNameAndSearch(targetPath, 'pathname')
+        } else if (key === 'search') {
+          const targetPath = proxyLocation.pathname + ('?' + value).replace(/^\?+/, '?') + proxyLocation.hash
+          handleForPathNameAndSearch(targetPath, 'search')
+        } else if (key === 'hash') {
+          const targetPath = proxyLocation.pathname + proxyLocation.search + ('#' + value).replace(/^#+/, '#')
+          const targetLocation = createURL(targetPath, url)
+          // The same hash will not trigger popStateEvent
+          if (targetLocation.hash !== proxyLocation.hash) {
+            navigateWithNativeEvent(
+              appName,
+              'pushState',
+              setMicroPathToURL(appName, targetLocation),
+              false,
+            )
+          }
+        } else {
+          Reflect.set(target, key, value)
+        }
+      }
+      return true
+    }
+  })
+
+  return proxyLocation as MicroLocation
 }
 
 /**
  * create guardLocation by microLocation, used for router guard
  */
-function createGuardLocation (appName: string, microLocation: MicroLocation): GuardLocation {
+export function createGuardLocation (appName: string, microLocation: MicroLocation): GuardLocation {
   const guardLocation = oAssign({ name: appName }, microLocation) as GuardLocation
   // The prototype values on the URL needs to be manually transferred
   for (const key of guardLocationKeys) guardLocation[key] = microLocation[key]
@@ -234,16 +255,15 @@ export function updateMicroLocation (
   microLocation: MicroLocation,
   type?: string,
 ): void {
-  const newLocation = createURL(path, microLocation.href)
   // record old values of microLocation to `from`
   const from = createGuardLocation(appName, microLocation)
-  for (const key of locationKeys) {
-    if (shadowLocationKeys.includes(key)) {
-      // reference of shadowLocation
-      microLocation.shadowLocation[key] = newLocation[key] as string
-    } else {
-      // @ts-ignore reference of microLocation
-      microLocation[key] = newLocation[key]
+  const newLocation = createURL(path, microLocation.href)
+  if (isIframeSandbox(appName)) {
+    const microAppWindow = appInstanceMap.get(appName)!.sandBox.microAppWindow
+    microAppWindow.rawReplaceState?.call(microAppWindow.history, getMicroState(appName), '', newLocation.href)
+  } else {
+    for (const key of locationKeys) {
+      microLocation.self[key] = newLocation[key]
     }
   }
   // update latest values of microLocation to `to`

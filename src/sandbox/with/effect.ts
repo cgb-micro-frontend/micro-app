@@ -1,4 +1,9 @@
-import type { microAppWindowType, EffectController } from '@micro-app/types'
+import type {
+  microAppWindowType,
+  EffectController,
+  MicroEventListener,
+  timeInfo,
+} from '@micro-app/types'
 import {
   getCurrentAppName,
   setCurrentAppName,
@@ -6,16 +11,9 @@ import {
   logWarn,
   isFunction,
   rawDefineProperty,
-} from '../libs/utils'
-import { appInstanceMap } from '../create_app'
-import globalEnv from '../libs/global_env'
-
-type MicroEventListener = EventListenerOrEventListenerObject & Record<string, any>
-type timeInfo = {
-  handler: TimerHandler,
-  timeout?: number,
-  args: any[],
-}
+} from '../../libs/utils'
+import { appInstanceMap } from '../../create_app'
+import globalEnv from '../../libs/global_env'
 
 // this events should be sent to the specified app
 const formatEventList = ['unmount', 'appstate-change']

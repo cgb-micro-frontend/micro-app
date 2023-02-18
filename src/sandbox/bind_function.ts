@@ -4,6 +4,7 @@ import {
   isConstructor,
   rawDefineProperty,
   isBoolean,
+  isFunction,
 } from '../libs/utils'
 
 function isBoundedFunction (value: CallableFunction & {__MICRO_APP_IS_BOUND_FUNCTION__: boolean}): boolean {
@@ -17,12 +18,12 @@ function isConstructorFunction (value: FunctionConstructor & {__MICRO_APP_IS_CON
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export default function bindFunctionToRawObject<T = Window> (rawObject: T, value: any, key = 'WINDOW'): unknown {
-  const cacheKey = `__MICRO_APP_BOUND_${key}_FUNCTION__`
-  if (value[cacheKey]) return value[cacheKey]
+export default function bindFunctionToRawTarget<T = Window, B = unknown> (value: any, rawTarget: T, key = 'WINDOW'): B {
+  if (isFunction(value) && !isConstructorFunction(value) && !isBoundedFunction(value)) {
+    const cacheKey = `__MICRO_APP_BOUND_${key}_FUNCTION__`
+    if (value[cacheKey]) return value[cacheKey]
 
-  if (!isConstructorFunction(value) && !isBoundedFunction(value)) {
-    const bindRawObjectValue = value.bind(rawObject)
+    const bindRawObjectValue = value.bind(rawTarget)
 
     for (const key in value) {
       bindRawObjectValue[key] = value[key]

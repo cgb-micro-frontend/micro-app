@@ -37,7 +37,7 @@ import { appInstanceMap } from '../../create_app'
 import { getActiveApps } from '../../micro_app'
 import globalEnv from '../../libs/global_env'
 import { navigateWithNativeEvent, attachRouteToBrowserURL } from './history'
-import bindFunctionToRawObject from '../bind_function'
+import bindFunctionToRawTarget from '../bind_function'
 
 export interface RouterApi {
   router: Router,
@@ -107,8 +107,9 @@ function createRouterApi (): RouterApi {
           const microLocation = app!.sandBox!.proxyWindow.location as MicroLocation
           const targetLocation = createURL(to.path, microLocation.href)
           // Only get path data, even if the origin is different from microApp
+          const currentFullPath = microLocation.pathname + microLocation.search + microLocation.hash
           const targetFullPath = targetLocation.pathname + targetLocation.search + targetLocation.hash
-          if (microLocation.fullPath !== targetFullPath || getMicroPathFromURL(appName) !== targetFullPath) {
+          if (currentFullPath !== targetFullPath || getMicroPathFromURL(appName) !== targetFullPath) {
             const methodName = (replace && to.replace !== false) || to.replace === true ? 'replaceState' : 'pushState'
             navigateWithRawHistory(appName, methodName, targetLocation, to.state)
           }
@@ -290,8 +291,7 @@ function createRouterApi (): RouterApi {
         baseRouterProxy = new Proxy(baseRouter, {
           get (target: History, key: PropertyKey): unknown {
             removeDomScope()
-            const rawValue = Reflect.get(target, key)
-            return isFunction(rawValue) ? bindFunctionToRawObject(target, rawValue, 'BASEROUTER') : rawValue
+            return bindFunctionToRawTarget(Reflect.get(target, key), target, 'BASEROUTER')
           },
           set (target: History, key: PropertyKey, value: unknown): boolean {
             Reflect.set(target, key, value)

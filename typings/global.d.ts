@@ -24,10 +24,24 @@ declare module '@micro-app/types' {
 
   type fiberTasks = Array<() => Promise<void>> | null
 
+  type MicroEventListener = EventListenerOrEventListenerObject & Record<string, any>
+
+  type timeInfo = {
+    handler: TimerHandler,
+    timeout?: number,
+    args: any[],
+  }
+
   interface EffectController {
     recordEffect(): void
     rebuildEffect(): void
     releaseEffect(): void
+  }
+
+  interface CommonIframeEffect {
+    record(): void
+    rebuild(): void
+    release(umdMode?: boolean, preRender?: boolean): void
   }
 
   interface SandBoxStartParams {
@@ -41,11 +55,11 @@ declare module '@micro-app/types' {
   interface SandBoxStopParams {
     umdMode: boolean
     keepRouteState: boolean
-    clearEventSource: boolean
+    destroy: boolean
     clearData: boolean
   }
 
-  interface SandBoxInterface {
+  interface WithSandBoxInterface {
     proxyWindow: WindowProxy
     microAppWindow: Window // Proxy target
     start (startParams: SandBoxStartParams): void
@@ -128,13 +142,15 @@ declare module '@micro-app/types' {
   // app instance
   interface AppInterface extends Pick<ParentNode, 'querySelector' | 'querySelectorAll'> {
     source: sourceType // source list
-    sandBox: SandBoxInterface | null // sandbox
+    // TODO: 去掉any
+    sandBox: WithSandBoxInterface | null | any // sandbox
     name: string // app name
     url: string // app url
     scopecss: boolean // whether use css scoped, default is true
     useSandbox: boolean // whether use js sandbox, default is true
     inline: boolean //  whether js runs in inline script mode, default is false
     esmodule: boolean // support esmodule in script
+    iframe: boolean // use iframe sandbox
     ssrUrl: string // html path in ssr mode
     container: HTMLElement | ShadowRoot | null // container maybe null, micro-app, shadowRoot, div(keep-alive)
     umdMode: boolean // is umd mode
@@ -205,6 +221,7 @@ declare module '@micro-app/types' {
     'disable-sandbox'?: boolean
     inline?: boolean
     esmodule?: boolean
+    iframe?: boolean
     level?: number
     'default-page'?: string
     'disable-patch-request'?: boolean
@@ -297,6 +314,7 @@ declare module '@micro-app/types' {
     'keep-alive'?: boolean
     'clear-data'?: boolean
     esmodule?: boolean
+    iframe?: boolean
     ssr?: boolean
     fiber?: boolean
     prefetchLevel?: number
@@ -325,13 +343,10 @@ declare module '@micro-app/types' {
   // special CallableFunction for interact
   type CallableFunctionForInteract = CallableFunction & { __APP_NAME__?: string, __AUTO_TRIGGER__?: boolean }
 
-  interface ShadowLocation {
-    [k: string]: string
-  }
+  type PopStateListener = (this: Window, e: PopStateEvent) => void
+  type MicroPopStateEvent = PopStateEvent & { onlyForBrowser?: boolean }
 
   interface MicroLocation extends Location, URL {
-    // shadowLocation is the current location information (href, pathname, search, hash)
-    shadowLocation: ShadowLocation
     fullPath: string
     [key: string]: any
   }

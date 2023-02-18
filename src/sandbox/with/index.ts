@@ -1,7 +1,7 @@
 /* eslint-disable no-cond-assign */
 import type {
   microAppWindowType,
-  SandBoxInterface,
+  WithSandBoxInterface,
   plugins,
   MicroLocation,
   SandBoxAdapter,
@@ -13,9 +13,9 @@ import {
   EventCenterForMicroApp,
   rebuildDataCenterSnapshot,
   recordDataCenterSnapshot,
-} from '../interact'
-import globalEnv from '../libs/global_env'
-import { initEnvOfNestedApp } from '../libs/nest_app'
+} from '../../interact'
+import globalEnv from '../../libs/global_env'
+import { initEnvOfNestedApp } from '../../libs/nest_app'
 import {
   getEffectivePath,
   isArray,
@@ -27,23 +27,23 @@ import {
   throttleDeferForSetAppName,
   rawDefineProperty,
   rawDefineProperties,
-  isFunction,
   rawHasOwnProperty,
   pureCreateElement,
   assign,
-} from '../libs/utils'
-import microApp from '../micro_app'
-import bindFunctionToRawObject from './bind_function'
+} from '../../libs/utils'
+import microApp from '../../micro_app'
+import bindFunctionToRawTarget from '../bind_function'
 import effect, {
   effectDocumentEvent,
   releaseEffectDocumentEvent,
 } from './effect'
 import {
-  patchElementPrototypeMethods,
-  releasePatches,
-} from '../source/patch'
-import createMicroRouter, {
+  patchElementAndDocument,
+  releasePatchElementAndDocument,
+} from '../../source/patch'
+import {
   router,
+  createMicroRouter,
   initRouteStateWithURL,
   clearRouteStateFromURL,
   addHistoryListener,
@@ -51,7 +51,7 @@ import createMicroRouter, {
   updateBrowserURLWithLocation,
   patchHistory,
   releasePatchHistory,
-} from './router'
+} from '../router'
 import Adapter, {
   fixBabelPolyfill6,
   throttleDeferForParentNode,
@@ -60,11 +60,11 @@ import {
   createMicroFetch,
   useMicroEventSource,
   createMicroXMLHttpRequest,
-} from './request'
+} from '../request'
 export {
   router,
   getNoHashMicroPathFromURL,
-} from './router'
+} from '../router'
 
 export type MicroAppWindowDataType = {
   __MICRO_APP_ENVIRONMENT__: boolean,
@@ -86,7 +86,7 @@ export type proxyWindow = WindowProxy & MicroAppWindowDataType
 const { createMicroEventSource, clearMicroEventSource } = useMicroEventSource()
 const globalPropertyList: Array<PropertyKey> = ['window', 'self', 'globalThis']
 
-export default class SandBox implements SandBoxInterface {
+export default class WithSandBox implements WithSandBoxInterface {
   static activeCount = 0 // number of active sandbox
   private effectController: EffectController
   private removeHistoryListener!: CallableFunction
@@ -156,9 +156,10 @@ export default class SandBox implements SandBoxInterface {
       }
 
       /**
-       * 1. Prevent the key deleted during sandBox.stop after rewrite
-       * 2. Umd mode will not delete any keys during sandBox.stop
-       * 3. It must not be umd mode when call sandbox.start at the first time
+       * Target: Ensure default mode action exactly same to first time when render again
+       * 1. The following globalKey maybe modified when render, reset them when render again in default mode
+       * 2. Umd mode will not delete any keys during sandBox.stop, ignore umd mode
+       * 3. When sandbox.start called for the first time, it must be the default mode
        */
       if (!umdMode) {
         this.initGlobalKeysWhenStart(
@@ -169,9 +170,9 @@ export default class SandBox implements SandBoxInterface {
         )
       }
 
-      if (++SandBox.activeCount === 1) {
+      if (++WithSandBox.activeCount === 1) {
         effectDocumentEvent()
-        patchElementPrototypeMethods()
+        patchElementAndDocument()
         initEnvOfNestedApp()
         patchHistory()
       }
@@ -184,13 +185,13 @@ export default class SandBox implements SandBoxInterface {
    * close sandbox and perform some clean up actions
    * @param umdMode is umd mode
    * @param keepRouteState prevent reset route
-   * @param clearEventSource clear MicroEventSource when destroy
+   * @param destroy completely destroy, delete cache resources
    * @param clearData clear data from base app
    */
   public stop ({
     umdMode,
     keepRouteState,
-    clearEventSource,
+    destroy,
     clearData,
   }: SandBoxStopParams): void {
     if (this.active) {
@@ -203,17 +204,15 @@ export default class SandBox implements SandBoxInterface {
         this.removeHistoryListener()
       }
 
-      if (clearEventSource) {
-        clearMicroEventSource(this.microAppWindow.__MICRO_APP_NAME__)
-      }
-
       /**
        * NOTE:
        *  1. injectedKeys and escapeKeys must be placed at the back
        *  2. if key in initial microAppWindow, and then rewrite, this key will be delete from microAppWindow when stop, and lost when restart
        *  3. umd mode will not delete global keys
        */
-      if (!umdMode) {
+      if (!umdMode || destroy) {
+        clearMicroEventSource(this.microAppWindow.__MICRO_APP_NAME__)
+
         this.injectedKeys.forEach((key: PropertyKey) => {
           Reflect.deleteProperty(this.microAppWindow, key)
         })
@@ -225,9 +224,9 @@ export default class SandBox implements SandBoxInterface {
         this.escapeKeys.clear()
       }
 
-      if (--SandBox.activeCount === 0) {
+      if (--WithSandBox.activeCount === 0) {
         releaseEffectDocumentEvent()
-        releasePatches()
+        releasePatchElementAndDocument()
         releasePatchHistory()
       }
 
@@ -327,12 +326,14 @@ export default class SandBox implements SandBoxInterface {
           this.scopeProperties.includes(key)
         ) return Reflect.get(target, key)
 
-        const rawValue = Reflect.get(rawWindow, key)
-
-        return isFunction(rawValue) ? bindFunctionToRawObject(rawWindow, rawValue) : rawValue
+        return bindFunctionToRawTarget(Reflect.get(rawWindow, key), rawWindow)
       },
       set: (target: microAppWindowType, key: PropertyKey, value: unknown): boolean => {
         if (this.active) {
+          /**
+           * TODO:
+           * 1、location域名相同，子应用内部跳转时的处理
+           */
           if (this.adapter.escapeSetterKeyList.includes(key)) {
             Reflect.set(rawWindow, key, value)
           } else if (
@@ -353,8 +354,8 @@ export default class SandBox implements SandBoxInterface {
 
             this.injectedKeys.add(key)
           } else {
+            !Reflect.has(target, key) && this.injectedKeys.add(key)
             Reflect.set(target, key, value)
-            this.injectedKeys.add(key)
           }
 
           if (
@@ -367,8 +368,8 @@ export default class SandBox implements SandBoxInterface {
             ) &&
             !this.scopeProperties.includes(key)
           ) {
+            !Reflect.has(rawWindow, key) && this.escapeKeys.add(key)
             Reflect.set(rawWindow, key, value)
-            this.escapeKeys.add(key)
           }
         }
 
@@ -642,30 +643,30 @@ export default class SandBox implements SandBoxInterface {
 
   private initRouteState (defaultPage: string): void {
     initRouteStateWithURL(
-      this.proxyWindow.__MICRO_APP_NAME__,
-      this.proxyWindow.location as MicroLocation,
+      this.microAppWindow.__MICRO_APP_NAME__,
+      this.microAppWindow.location as MicroLocation,
       defaultPage,
     )
   }
 
   private clearRouteState (keepRouteState: boolean): void {
     clearRouteStateFromURL(
-      this.proxyWindow.__MICRO_APP_NAME__,
-      this.proxyWindow.__MICRO_APP_URL__,
-      this.proxyWindow.location as MicroLocation,
+      this.microAppWindow.__MICRO_APP_NAME__,
+      this.microAppWindow.__MICRO_APP_URL__,
+      this.microAppWindow.location as MicroLocation,
       keepRouteState,
     )
   }
 
   public setRouteInfoForKeepAliveApp (): void {
     updateBrowserURLWithLocation(
-      this.proxyWindow.__MICRO_APP_NAME__,
-      this.proxyWindow.location as MicroLocation,
+      this.microAppWindow.__MICRO_APP_NAME__,
+      this.microAppWindow.location as MicroLocation,
     )
   }
 
   public removeRouteInfoForKeepAliveApp (): void {
-    removeStateAndPathFromBrowser(this.proxyWindow.__MICRO_APP_NAME__)
+    removeStateAndPathFromBrowser(this.microAppWindow.__MICRO_APP_NAME__)
   }
 
   /**
@@ -688,8 +689,7 @@ export default class SandBox implements SandBoxInterface {
         if (key === 'createElement') return createElement
         if (key === Symbol.toStringTag) return 'ProxyDocument'
         if (key === 'defaultView') return this.proxyWindow
-        const rawValue = Reflect.get(target, key)
-        return isFunction(rawValue) ? bindFunctionToRawObject(rawDocument, rawValue, 'DOCUMENT') : rawValue
+        return bindFunctionToRawTarget<Document>(Reflect.get(target, key), rawDocument, 'DOCUMENT')
       },
       set: (target: Document, key: PropertyKey, value: unknown): boolean => {
         /**
@@ -730,8 +730,7 @@ export default class SandBox implements SandBoxInterface {
     Object.setPrototypeOf(MicroDocument.prototype, new Proxy(rawRootDocument.prototype, {
       get (target: Document, key: PropertyKey): unknown {
         throttleDeferForSetAppName(appName)
-        const rawValue = Reflect.get(target, key)
-        return isFunction(rawValue) ? bindFunctionToRawObject(rawDocument, rawValue, 'DOCUMENT') : rawValue
+        return bindFunctionToRawTarget<Document>(Reflect.get(target, key), rawDocument, 'DOCUMENT')
       },
       set (target: Document, key: PropertyKey, value: unknown): boolean {
         Reflect.set(target, key, value)

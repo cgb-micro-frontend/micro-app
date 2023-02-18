@@ -5,6 +5,10 @@ import {
   pureCreateElement,
   injectFiberTask,
   serialExecFiberTasks,
+  isLinkElement,
+  isScriptElement,
+  isStyleElement,
+  isImageElement,
 } from '../libs/utils'
 import { extractLinkFromHtml, fetchLinksFromHtml } from './links'
 import { extractScriptElement, fetchScriptsFromHtml, checkExcludeUrl, checkIgnoreUrl } from './scripts'
@@ -42,7 +46,7 @@ function flatChildren (
   })
 
   for (const dom of children) {
-    if (dom instanceof HTMLLinkElement) {
+    if (isLinkElement(dom)) {
       if (dom.hasAttribute('exclude') || checkExcludeUrl(dom.getAttribute('href'), app.name)) {
         parent.replaceChild(document.createComment('link element with exclude attribute ignored by micro-app'), dom)
       } else if (!(dom.hasAttribute('ignore') || checkIgnoreUrl(dom.getAttribute('href'), app.name))) {
@@ -50,15 +54,15 @@ function flatChildren (
       } else if (dom.hasAttribute('href')) {
         dom.setAttribute('href', CompletionPath(dom.getAttribute('href')!, app.url))
       }
-    } else if (dom instanceof HTMLStyleElement) {
+    } else if (isStyleElement(dom)) {
       if (dom.hasAttribute('exclude')) {
         parent.replaceChild(document.createComment('style element with exclude attribute ignored by micro-app'), dom)
       } else if (app.scopecss && !dom.hasAttribute('ignore')) {
         injectFiberTask(fiberStyleTasks, () => scopedCSS(dom, app))
       }
-    } else if (dom instanceof HTMLScriptElement) {
+    } else if (isScriptElement(dom)) {
       extractScriptElement(dom, parent, app)
-    } else if (dom instanceof HTMLImageElement && dom.hasAttribute('src')) {
+    } else if (isImageElement(dom) && dom.hasAttribute('src')) {
       dom.setAttribute('src', CompletionPath(dom.getAttribute('src')!, app.url))
     }
     /**

@@ -107,15 +107,41 @@ export function isShadowRoot (target: unknown): target is ShadowRoot {
 }
 
 export function isURL (target: unknown): target is URL {
-  return target instanceof URL
+  return target instanceof URL || !!(target as URL)?.href
 }
 
+// iframe element not instanceof base app Element, use tagName instead
 export function isElement (target: unknown): target is Element {
-  return target instanceof Element
+  return target instanceof Element || isString((target as Element)?.tagName)
 }
 
+// iframe node not instanceof base app Node, use nodeType instead
 export function isNode (target: unknown): target is Node {
-  return target instanceof Node
+  return target instanceof Node || isNumber((target as Node)?.nodeType)
+}
+
+export function isLinkElement (target: unknown): target is HTMLLinkElement {
+  return (target as HTMLLinkElement)?.tagName?.toUpperCase() === 'LINK'
+}
+
+export function isStyleElement (target: unknown): target is HTMLStyleElement {
+  return (target as HTMLStyleElement)?.tagName?.toUpperCase() === 'STYLE'
+}
+
+export function isScriptElement (target: unknown): target is HTMLScriptElement {
+  return (target as HTMLScriptElement)?.tagName?.toUpperCase() === 'SCRIPT'
+}
+
+export function isIFrameElement (target: unknown): target is HTMLIFrameElement {
+  return (target as HTMLIFrameElement)?.tagName?.toUpperCase() === 'IFRAME'
+}
+
+export function isDivElement (target: unknown): target is HTMLDivElement {
+  return (target as HTMLDivElement)?.tagName?.toUpperCase() === 'DIV'
+}
+
+export function isImageElement (target: unknown): target is HTMLImageElement {
+  return (target as HTMLImageElement)?.tagName?.toUpperCase() === 'IMG'
 }
 
 // is ProxyDocument
@@ -606,5 +632,11 @@ export function callFnWithTryCatch (
     isFunction(fn) && fn(...args)
   } catch (e) {
     logError(`an error occurred in app ${appName} ${msgSuffix} \n`, null, e)
+  }
+}
+
+export function clearDOM ($dom: HTMLElement | ShadowRoot | Document): void {
+  while ($dom?.firstChild) {
+    $dom.removeChild($dom.firstChild)
   }
 }

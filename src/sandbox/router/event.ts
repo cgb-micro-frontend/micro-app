@@ -1,14 +1,32 @@
-import type { MicroLocation } from '@micro-app/types'
-import { appInstanceMap } from '../../create_app'
-import { getActiveApps } from '../../micro_app'
-import { formatEventName } from '../effect'
-import { getMicroPathFromURL, getMicroState, isEffectiveApp } from './core'
-import { updateMicroLocation } from './location'
+import type {
+  MicroLocation,
+  PopStateListener,
+  MicroPopStateEvent,
+  microAppWindowType,
+} from '@micro-app/types'
+import {
+  appInstanceMap,
+} from '../../create_app'
+import {
+  getActiveApps,
+} from '../../micro_app'
+import {
+  formatEventName,
+} from '../with/effect'
+import {
+  getMicroPathFromURL,
+  getMicroState,
+  isEffectiveApp,
+  isIframeSandbox,
+} from './core'
+import {
+  updateMicroLocation,
+} from './location'
+import {
+  removeDomScope,
+  isFunction,
+} from '../../libs/utils'
 import globalEnv from '../../libs/global_env'
-import { removeDomScope, isFunction } from '../../libs/utils'
-
-type PopStateListener = (this: Window, e: PopStateEvent) => void
-type MicroPopStateEvent = PopStateEvent & { onlyForBrowser?: boolean }
 
 /**
  * dispatch PopStateEvent & HashChangeEvent to child app
@@ -26,27 +44,31 @@ export function addHistoryListener (appName: string): CallableFunction {
      * 2. filter out onlyForBrowser
      */
     if (
-      getActiveApps({ excludeHiddenApp: true, excludePreRender: true }).includes(appName) &&
+      getActiveApps({
+        excludeHiddenApp: true,
+        excludePreRender: true,
+      }).includes(appName) &&
       !e.onlyForBrowser
     ) {
       const microPath = getMicroPathFromURL(appName)
       const app = appInstanceMap.get(appName)!
       const proxyWindow = app.sandBox!.proxyWindow
+      const microAppWindow = app.sandBox!.microAppWindow
       let isHashChange = false
       // for hashChangeEvent
       const oldHref = proxyWindow.location.href
       // Do not attach micro state to url when microPath is empty
       if (microPath) {
         const oldHash = proxyWindow.location.hash
-        updateMicroLocation(appName, microPath, proxyWindow.location as MicroLocation)
+        updateMicroLocation(appName, microPath, microAppWindow.location as MicroLocation)
         isHashChange = proxyWindow.location.hash !== oldHash
       }
 
       // dispatch formatted popStateEvent to child
-      dispatchPopStateEventToMicroApp(appName, proxyWindow)
+      dispatchPopStateEventToMicroApp(appName, proxyWindow, microAppWindow)
 
       // dispatch formatted hashChangeEvent to child when hash change
-      if (isHashChange) dispatchHashChangeEventToMicroApp(appName, proxyWindow, oldHref)
+      if (isHashChange) dispatchHashChangeEventToMicroApp(appName, proxyWindow, microAppWindow, oldHref)
 
       // clear element scope before trigger event of next app
       removeDomScope()
@@ -69,14 +91,10 @@ export function addHistoryListener (appName: string): CallableFunction {
 export function dispatchPopStateEventToMicroApp (
   appName: string,
   proxyWindow: WindowProxy,
+  microAppWindow: microAppWindowType,
 ): void {
-  // create PopStateEvent named popstate-appName with sub app state
-  const newPopStateEvent = new PopStateEvent(
-    formatEventName('popstate', appName),
-    { state: getMicroState(appName) }
-  )
-
   /**
+   * TODO: test
    * angular14 takes e.type as type judgment
    * when e.type is popstate-appName popstate event will be invalid
    */
@@ -86,8 +104,17 @@ export function dispatchPopStateEventToMicroApp (
   //   configurable: true,
   //   enumerable: true,
   // })
+  // create PopStateEvent named popstate-appName with sub app state
+  const newPopStateEvent = new PopStateEvent(
+    isIframeSandbox(appName) ? 'popstate' : formatEventName('popstate', appName),
+    { state: getMicroState(appName) }
+  )
 
-  globalEnv.rawWindow.dispatchEvent(newPopStateEvent)
+  if (isIframeSandbox(appName)) {
+    microAppWindow.dispatchEvent(newPopStateEvent)
+  } else {
+    globalEnv.rawWindow.dispatchEvent(newPopStateEvent)
+  }
 
   // call function window.onpopstate if it exists
   isFunction(proxyWindow.onpopstate) && proxyWindow.onpopstate(newPopStateEvent)
@@ -102,17 +129,21 @@ export function dispatchPopStateEventToMicroApp (
 export function dispatchHashChangeEventToMicroApp (
   appName: string,
   proxyWindow: WindowProxy,
+  microAppWindow: microAppWindowType,
   oldHref: string,
 ): void {
   const newHashChangeEvent = new HashChangeEvent(
-    formatEventName('hashchange', appName),
+    isIframeSandbox(appName) ? 'hashchange' : formatEventName('hashchange', appName),
     {
       newURL: proxyWindow.location.href,
       oldURL: oldHref,
     }
   )
-
-  globalEnv.rawWindow.dispatchEvent(newHashChangeEvent)
+  if (isIframeSandbox(appName)) {
+    microAppWindow.dispatchEvent(newHashChangeEvent)
+  } else {
+    globalEnv.rawWindow.dispatchEvent(newHashChangeEvent)
+  }
 
   // call function window.onhashchange if it exists
   isFunction(proxyWindow.onhashchange) && proxyWindow.onhashchange(newHashChangeEvent)

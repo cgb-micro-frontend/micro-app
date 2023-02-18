@@ -33,7 +33,7 @@ export { patchHistory, releasePatchHistory } from './history'
  * @param url app url
  * @returns MicroRouter
  */
-export default function createMicroRouter (appName: string, url: string): MicroRouter {
+export function createMicroRouter (appName: string, url: string): MicroRouter {
   const microLocation = createMicroLocation(appName, url)
   return {
     microLocation,

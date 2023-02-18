@@ -208,3 +208,8 @@ export function isEffectiveApp (appName: string): boolean {
   const app = appInstanceMap.get(appName)
   return !!(app && !app.isPrefetch)
 }
+
+// iframe route mode
+export function isIframeSandbox (appName: string): boolean {
+  return appInstanceMap.get(appName)?.iframe ?? false
+}

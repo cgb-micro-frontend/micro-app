@@ -20,6 +20,10 @@ declare global {
     __REACT_ERROR_OVERLAY_GLOBAL_HOOK__: boolean
     mount: Func
     unmount: Func
+    rawLocation: Location
+    rawWindow: Window
+    rawDocument: Document
+    Document: any
   }
 
   interface Node {
@@ -46,9 +50,11 @@ const globalEnv: Record<string, any> = {}
  */
 export function initGlobalEnv (): void {
   if (isBrowser) {
-    const rawWindow = Function('return window')()
-    const rawDocument = Function('return document')()
-    const rawRootDocument = Function('return Document')()
+    // mark current application as base application
+    window.__MICRO_APP_BASE_APPLICATION__ = true
+    const rawWindow = window.rawWindow || Function('return window')()
+    const rawDocument = window.rawDocument || Function('return document')()
+    const rawRootDocument = rawWindow.Document || Function('return Document')()
     const supportModuleScript = isSupportModuleScript()
     /**
      * save patch raw methods
@@ -69,6 +75,7 @@ export function initGlobalEnv (): void {
     const rawCreateElement = rawRootDocument.prototype.createElement
     const rawCreateElementNS = rawRootDocument.prototype.createElementNS
     const rawCreateDocumentFragment = rawRootDocument.prototype.createDocumentFragment
+    const rawCreateTextNode = rawRootDocument.prototype.createTextNode
     const rawQuerySelector = rawRootDocument.prototype.querySelector
     const rawQuerySelectorAll = rawRootDocument.prototype.querySelectorAll
     const rawGetElementById = rawRootDocument.prototype.getElementById
@@ -88,8 +95,6 @@ export function initGlobalEnv (): void {
      * save effect raw methods
      * pay attention to this binding, especially setInterval, setTimeout, clearInterval, clearTimeout
      */
-    const rawWindowAddEventListener = rawWindow.addEventListener
-    const rawWindowRemoveEventListener = rawWindow.removeEventListener
     const rawSetInterval = rawWindow.setInterval
     const rawSetTimeout = rawWindow.setTimeout
     const rawClearInterval = rawWindow.clearInterval
@@ -97,11 +102,13 @@ export function initGlobalEnv (): void {
     const rawPushState = rawWindow.history.pushState
     const rawReplaceState = rawWindow.history.replaceState
 
+    const rawWindowAddEventListener = rawWindow.addEventListener
+    const rawWindowRemoveEventListener = rawWindow.removeEventListener
     const rawDocumentAddEventListener = rawDocument.addEventListener
     const rawDocumentRemoveEventListener = rawDocument.removeEventListener
-
-    // mark current application as base application
-    window.__MICRO_APP_BASE_APPLICATION__ = true
+    // TODO: 统一使用 EventTarget 去掉上面四个
+    const rawAddEventListener = EventTarget.prototype.addEventListener
+    const rawRemoveEventListener = EventTarget.prototype.removeEventListener
 
     assign(globalEnv, {
       // common global vars
@@ -126,6 +133,7 @@ export function initGlobalEnv (): void {
       rawCreateElement,
       rawCreateElementNS,
       rawCreateDocumentFragment,
+      rawCreateTextNode,
       rawQuerySelector,
       rawQuerySelectorAll,
       rawGetElementById,
@@ -145,6 +153,12 @@ export function initGlobalEnv (): void {
       rawDocumentRemoveEventListener,
       rawPushState,
       rawReplaceState,
+
+      rawAddEventListener,
+      rawRemoveEventListener,
+
+      // iframe
+
     })
 
     // global effect

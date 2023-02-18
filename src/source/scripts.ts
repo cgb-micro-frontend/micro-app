@@ -24,6 +24,7 @@ import {
   injectFiberTask,
   serialExecFiberTasks,
   isInlineScript,
+  isString,
 } from '../libs/utils'
 import {
   dispatchOnLoadEvent,
@@ -40,7 +41,8 @@ const scriptTypes = ['text/javascript', 'text/ecmascript', 'application/javascri
 
 // whether use type='module' script
 function isTypeModule (app: AppInterface, scriptInfo: ScriptSourceInfo): boolean {
-  return scriptInfo.appSpace[app.name].module && (!app.useSandbox || app.esmodule)
+  // console.log(3333333, scriptInfo.appSpace, app.iframe)
+  return scriptInfo.appSpace[app.name].module && (!app.useSandbox || app.esmodule || app.iframe)
 }
 
 // special script element
@@ -62,7 +64,8 @@ function isInlineMode (app: AppInterface, scriptInfo: ScriptSourceInfo): boolean
     app.inline ||
     scriptInfo.appSpace[app.name].inline ||
     isTypeModule(app, scriptInfo) ||
-    isSpecialScript(app, scriptInfo)
+    isSpecialScript(app, scriptInfo) ||
+    app.iframe // TODO: remove
   )
 }
 
@@ -391,7 +394,8 @@ export function execScripts (
     const appSpaceData = scriptInfo.appSpace[app.name]
     // Notice the second render
     if (appSpaceData.defer || appSpaceData.async) {
-      if (scriptInfo.isExternal && !scriptInfo.code) {
+      // TODO: defer和module彻底分开，不要混在一起
+      if (scriptInfo.isExternal && !scriptInfo.code && !(app.iframe && appSpaceData.module)) {
         deferScriptPromise.push(fetchSource(address, app.name))
       } else {
         deferScriptPromise.push(scriptInfo.code)
@@ -416,7 +420,7 @@ export function execScripts (
       logError(err, app.name)
     }, () => {
       deferScriptInfo.forEach(([address, scriptInfo]) => {
-        if (scriptInfo.code) {
+        if (isString(scriptInfo.code)) {
           injectFiberTask(fiberScriptTasks, () => {
             runScript(address, app, scriptInfo, initHook)
             !isTypeModule(app, scriptInfo) && initHook(false)
@@ -498,7 +502,9 @@ export function runScript (
 
       if (!replaceElement) {
         // TEST IGNORE
-        app.querySelector('micro-app-body')?.appendChild(scriptElement)
+        const parent = app.iframe ? app.sandBox!.microBody : app.querySelector('micro-app-body')
+
+        parent?.appendChild(scriptElement)
       }
     } else {
       runParsedFunction(app, scriptInfo)
@@ -539,7 +545,7 @@ export function runDynamicRemoteScript (
     !isTypeModule(app, scriptInfo) && dispatchScriptOnLoadEvent()
   }
 
-  if (scriptInfo.code) {
+  if (scriptInfo.code || (app.iframe && scriptInfo.appSpace[app.name].module)) {
     defer(runDynamicScript)
   } else {
     fetchSource(address, app.name).then((code: string) => {
@@ -630,13 +636,13 @@ function bindScope (
   code: string,
   scriptInfo: ScriptSourceInfo,
 ): string {
-  // TODO: cache
+  // TODO: 1、cache 2、esm code is null
   if (isPlainObject(microApp.options.plugins)) {
     code = usePlugins(address, code, app.name, microApp.options.plugins)
   }
 
   if (isWrapInSandBox(app, scriptInfo)) {
-    return `;(function(proxyWindow){with(proxyWindow.__MICRO_APP_WINDOW__){(function(${globalKeyToBeCached}){;${code}\n${isInlineScript(address) ? '' : `//# sourceURL=${address}\n`}}).call(proxyWindow,${globalKeyToBeCached})}})(window.__MICRO_APP_PROXY_WINDOW__);`
+    return app.iframe ? `(function(window,self,global,location){;${code}\n${isInlineScript(address) ? '' : `//# sourceURL=${address}\n`}}).bind(window.__MICRO_APP_SANDBOX__.proxyWindow)(window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyLocation);` : `;(function(proxyWindow){with(proxyWindow.__MICRO_APP_WINDOW__){(function(${globalKeyToBeCached}){;${code}\n${isInlineScript(address) ? '' : `//# sourceURL=${address}\n`}}).call(proxyWindow,${globalKeyToBeCached})}})(window.__MICRO_APP_PROXY_WINDOW__);`
   }
 
   return code

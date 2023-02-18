@@ -55,46 +55,46 @@ window.addEventListener('appstate-change', function (e) {
 })
 
 /* ----------------------分割线-默认模式--------------------- */
-ReactDOM.render(
-  <React.StrictMode>
-    <Router />
-  </React.StrictMode>,
-  document.getElementById('root')
-);
+// ReactDOM.render(
+//   <React.StrictMode>
+//     <Router />
+//   </React.StrictMode>,
+//   document.getElementById('root')
+// );
 
-// 注册unmount函数，卸载时会自动执行
-window.unmount = () => {
-  ReactDOM.unmountComponentAtNode(document.getElementById('root'));
-  console.log('微应用react16卸载了 -- 默认模式');
-}
+// // 注册unmount函数，卸载时会自动执行
+// window.unmount = () => {
+//   ReactDOM.unmountComponentAtNode(document.getElementById('root'));
+//   console.log('微应用react16卸载了 -- 默认模式');
+// }
 
-console.timeEnd('react#16');
+// console.timeEnd('react#16');
 
 /* ----------------------分割线-umd模式--------------------- */
 // 👇 将渲染操作放入 mount 函数，子应用初始化时会自动执行
-// window.mount = (data) => {
-//   ReactDOM.render(
-//     <React.StrictMode>
-//       <Router />
-//     </React.StrictMode>,
-//     document.getElementById('root')
-//   );
-//   console.log('微应用react16渲染了 -- UMD模式', data);
-//   console.timeEnd('react#16');
-// }
+window.mount = (data) => {
+  ReactDOM.render(
+    <React.StrictMode>
+      <Router />
+    </React.StrictMode>,
+    document.getElementById('root')
+  );
+  console.log('微应用react16渲染了 -- UMD模式', data);
+  console.timeEnd('react#16');
+}
 
-// // 👇 将卸载操作放入 unmount 函数
-// window.unmount = (data) => {
-//   // 卸载时关闭弹窗
-//   notification.destroy()
-//   ReactDOM.unmountComponentAtNode(document.getElementById('root'));
-//   console.log('微应用react16卸载了 -- UMD模式', data);
-// }
+// 👇 将卸载操作放入 unmount 函数
+window.unmount = (data) => {
+  // 卸载时关闭弹窗
+  notification.destroy()
+  ReactDOM.unmountComponentAtNode(document.getElementById('root'));
+  console.log('微应用react16卸载了 -- UMD模式', data);
+}
 
-// // 如果不在微前端环境，则直接执行mount渲染
-// if (!window.__MICRO_APP_ENVIRONMENT__) {
-//   window.mount()
-// }
+// 如果不在微前端环境，则直接执行mount渲染
+if (!window.__MICRO_APP_ENVIRONMENT__) {
+  window.mount()
+}
 
 /* ---------------------- micro-app 自定义全局事件 --------------------- */
 
@@ -325,15 +325,37 @@ if (window.__MICRO_APP_ENVIRONMENT__) {
 
 
 /* ---------------------- location 跳转 --------------------- */
-// setTimeout(() => {
-//   // window.location.href = 'http://localhost:3001/micro-app/react16/#abc'
-//   // window.location.pathname = '/micro-app/react16/page2#fff'
-//   // window.location.assign('http://localhost:3001/micro-app/react16/page2#eee')
-//   // window.location.replace('http://localhost:3001/micro-app/react16/page2#eee')
-//   console.log(111111, window.location)
+// 依次放开每个注释来，尽可能覆盖所有场景
+setTimeout(() => {
+  // window.location.href = 'https://www.baidu.com/' // origin不同，直接跳转页面
+  // window.location.href = 'http://localhost:3001/micro-app/react16/page2' // path改变，刷新浏览器
+  // window.location.href = 'http://localhost:3001/micro-app/react16/page2#abc' // path不变，hash改变，不刷新浏览器，发送popstate、hashchange事件
+  // window.location.href = 'http://localhost:3001/micro-app/react16/page2/' // hash从有到无，刷新浏览器
+  // window.location.href = 'http://localhost:3001/micro-app/react16'
+  // window.location.href = 'http://localhost:3001/micro-app/react16/' // path相同，刷新浏览器
+  // window.location.href = 'http://localhost:3001/micro-app/react16/?a=1' // search变化，刷新浏览器
 
-//   // window.history.scrollRestoration = 'manual'
-// }, 5000);
+
+  // window.location.pathname = '/micro-app/react16/page2' // path改变，刷新浏览器
+  // window.location.pathname = '/micro-app/react16/page2#hash1' // 无法直接通过pathname修改hash的值，这里的写法是错误的，而且会导致浏览器刷新，需要完善一下
+  // window.location.pathname = '/micro-app/react16/page2?b=2'
+
+  // window.location.search = '?c=3' // search改变，刷新浏览器
+  // window.location.search = '?c=3' // search不变，刷新浏览器
+
+  // window.location.hash = '#a' // hash改变，不刷新浏览器
+  // window.location.hash = '#a' // hash不变，不刷新浏览器
+
+
+  // window.location.assign('http://localhost:3001/micro-app/react16/page2') // path改变，刷新浏览器
+  // window.location.assign('http://localhost:3001/micro-app/react16/page2#abc') // path不变，hash改变，不刷新浏览器，发送popstate、hashchange事件
+
+  // window.location.replace('http://localhost:3001/micro-app/react16/page2') // 同上
+  // window.location.replace('http://localhost:3001/micro-app/react16/page2#abc') // 同上
+  // console.log(111111, window.location)
+
+  // window.history.scrollRestoration = 'manual'
+}, 5000);
 
 
 /* ---------------------- popstate 和 hashchange --------------------- */

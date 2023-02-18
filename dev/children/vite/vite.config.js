@@ -9,27 +9,34 @@ export default defineConfig({
     //   targets: ['Chrome >= 59']
     // }),
     vue(),
-    (function () {
-      let basePath = ''
-      return {
-        name: "vite:micro-app",
-        apply: 'build',
-        configResolved(config) {
-          basePath = `${config.base}${config.build.assetsDir}/`
-        },
-        renderChunk(code, chunk) {
-          if (chunk.fileName.endsWith('.js') && /(from|import)(\s*['"])(\.\.?\/)/g.test(code)) {
-            code = code.replace(/(from|import)(\s*['"])(\.\.?\/)/g, (all, $1, $2, $3) => {
-              return all.replace($3, new URL($3, basePath))
-            })
-          }
-          return code
-        }
-      }
-    })(),
+    // (function () {
+    //   let basePath = ''
+    //   return {
+    //     name: "vite:micro-app",
+    //     apply: 'build',
+    //     configResolved(config) {
+    //       basePath = `${config.base}${config.build.assetsDir}/`
+    //     },
+    //     renderChunk(code, chunk) {
+    //       if (chunk.fileName.endsWith('.js') && /(from|import)(\s*['"])(\.\.?\/)/g.test(code)) {
+    //         code = code.replace(/(from|import)(\s*['"])(\.\.?\/)/g, (all, $1, $2, $3) => {
+    //           return all.replace($3, new URL($3, basePath))
+    //         })
+    //       }
+    //       return code
+    //     }
+    //   }
+    // })(),
   ],
   server: {
     port: 7001,
+    proxy: {
+      '/sugrec': {
+        target: 'https://www.baidu.com',
+        secure: false,
+        changeOrigin: true,
+      }
+    }
   },
   build: {
     outDir: 'vite',

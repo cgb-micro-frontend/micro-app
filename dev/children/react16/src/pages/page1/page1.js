@@ -74,6 +74,9 @@ function Page1() {
 
 
   useEffect(() => {
+    // setInterval(() => {
+    //   console.log(`子应用${window.__MICRO_APP_NAME__}的setInterval`)
+    // }, 5000)
   //   loadModules(["esri/Map", "esri/views/MapView"])
   //   .then(([Map, MapView]) => {
   //     const map = new Map({

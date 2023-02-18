@@ -69,30 +69,31 @@ microApp.start({
   // preFetchApps: prefetchConfig,
   // prefetchLevel: 3,
   // prefetchDelay: 10000,
+  // iframe: true,
   lifeCycles: {
     created (e) {
-      console.log('created 全局监听', e)
+      console.log('created 全局监听', 'name:', e.detail.name)
     },
     beforemount (e) {
-      console.log('beforemount 全局监听', e)
+      console.log('beforemount 全局监听', 'name:', e.detail.name)
     },
     mounted (e) {
-      console.log('mounted 全局监听', e)
+      console.log('mounted 全局监听', 'name:', e.detail.name)
     },
     unmount (e) {
-      console.log('unmount 全局监听', e)
+      console.log('unmount 全局监听', 'name:', e.detail.name)
     },
     error (e) {
-      console.log('error 全局监听', e)
+      console.log('error 全局监听', 'name:', e.detail.name)
     },
     beforeshow (e) {
-      console.log('beforeshow 全局监听', e)
+      console.log('beforeshow 全局监听', 'name:', e.detail.name)
     },
     aftershow (e) {
-      console.log('aftershow 全局监听', e)
+      console.log('aftershow 全局监听', 'name:', e.detail.name)
     },
     afterhidden (e) {
-      console.log('afterhidden 全局监听', e)
+      console.log('afterhidden 全局监听', 'name:', e.detail.name)
     },
   },
   plugins: {
@@ -128,15 +129,8 @@ microApp.start({
         }
       }],
       vite: [{
-        loader(code) {
-          if (process.env.NODE_ENV === 'development') {
-            code = code.replace(/(from|import)(\s*['"])(\/micro-app\/vite\/)/g, (all) => {
-              return all.replace('/micro-app/vite/', 'http://localhost:7001/micro-app/vite/')
-            })
-          }
-          return code
-        }
-      }]
+        escapeProperties: ['escapeKey3', 'escapeKey4'],
+      }],
     }
   },
   /**
@@ -199,7 +193,7 @@ window.addEventListener('popstate', (e) => {
   // const a = document.createElement('div')
   //   a.innerHTML = '55555555'
   //   document.body.appendChild(a)
-  console.log('基座 popstate', e, window.location.href)
+  console.log('基座 popstate', 'state:', e.state)
   // history.replaceState(history.state, '', location.href)
 })
 
