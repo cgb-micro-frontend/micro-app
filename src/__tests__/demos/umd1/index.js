@@ -46,14 +46,15 @@ window.microApp && window.microApp.addGlobalDataListener(() => {
   console.warn('scoped globalData from umd init env')
 }, true)
 
-// 卸载后，全局变量gd1会被删除，重新渲染后，此值恢复为1
-window.gd1 = 1
+// 卸载后，全局变量testGlobalKey会被保留，不再清空
+window.testGlobalKey = 1
 // 卸载后，逃逸的__cjsWrapper会被删除，重新渲染后，此值恢复
 window.__cjsWrapper = '__cjsWrapper'
 
 let renderCount = 0
 
-function mount () {
+window.mount = function mount () {
+  console.log('----window.渲染-----')
   renderCount++
   const root = document.querySelector('#umd-root1')
   root.innerHTML = `
@@ -62,20 +63,14 @@ function mount () {
       <span class='test-font'>text2</span>
     </div>
   `
-  if (window.microApp) {
-    // 沙箱环境下，因为快照，gd1始终为1
-    expect(window.gd1).toBe(1)
+  // 关闭沙箱后，第一次值为1，再次渲染时值始终为2
+  if (renderCount === 1) {
+    window.expect && expect(window.testGlobalKey).toBe(1)
   } else {
-    // 关闭沙箱后，第一次值为1，再次渲染时值始终为2
-    if (renderCount === 1) {
-      expect(window.gd1).toBe(1)
-    } else {
-      expect(window.gd1).toBe(2)
-    }
+    window.expect && expect(window.testGlobalKey).toBe(2)
   }
-  expect(window.__cjsWrapper).toBe('__cjsWrapper')
-  window.gd1 = 2
-  window.gd2 = 2
+  window.expect && expect(window.__cjsWrapper).toBe('__cjsWrapper')
+  window.testGlobalKey = 2
   window.System = 'System'
 
   const boundFunc1 = (function func1 () {}).bind(window)
@@ -84,9 +79,8 @@ function mount () {
   document.addEventListener('click', boundFunc1, false)
 }
 
-function unmount () {
+window.unmount = function unmount () {
+  console.log('----window.卸载-----')
   const root = document.querySelector('#umd-root1')
   root && (root.innerHTML = '')
 }
-
-window['umd-app1'] = { mount, unmount }

@@ -2,118 +2,223 @@ import type {
   microAppWindowType,
 } from '@micro-app/types'
 import type IframeSandbox from './index'
+import globalEnv from '../../libs/global_env'
+import microApp from '../../micro_app'
 import {
   rawDefineProperty,
   CompletionPath,
   isScriptElement,
+  isBaseElement,
+  isElement,
+  isNode,
+  isMicroAppBody,
+  throttleDeferForSetAppName,
 } from '../../libs/utils'
-import globalEnv from '../../libs/global_env'
 import {
   updateElementInfo,
-} from './actions'
+} from '../adapter'
 import {
   appInstanceMap,
 } from '../../create_app'
 
-export function patchIframeElement (
+/**
+ * patch Element & Node of child app
+ * @param appName app name
+ * @param url app url
+ * @param microAppWindow microWindow of child app
+ * @param sandbox IframeSandbox
+ */
+export function patchElement (
   appName: string,
   url: string,
   microAppWindow: microAppWindowType,
-  iframeSandbox: IframeSandbox,
+  sandbox: IframeSandbox,
 ): void {
-  patchIframeNode(appName, microAppWindow, iframeSandbox)
-  patchIframeAttribute(appName, url, microAppWindow)
+  patchIframeNode(appName, microAppWindow, sandbox)
+  patchIframeAttribute(url, microAppWindow)
 }
 
 function patchIframeNode (
   appName: string,
   microAppWindow: microAppWindowType,
-  iframeSandbox: IframeSandbox,
+  sandbox: IframeSandbox,
 ): void {
-  // const microDocument = microAppWindow.document
+  const rawRootElement = globalEnv.rawRootElement // native root Element
   const rawDocument = globalEnv.rawDocument
+  const microDocument = microAppWindow.document
   const microRootNode = microAppWindow.Node
-  const rawMicroGetRootNode = microRootNode.prototype.getRootNode
+  const microRootElement = microAppWindow.Element
+  // const rawMicroGetRootNode = microRootNode.prototype.getRootNode
   const rawMicroAppendChild = microRootNode.prototype.appendChild
   const rawMicroInsertBefore = microRootNode.prototype.insertBefore
   const rawMicroReplaceChild = microRootNode.prototype.replaceChild
+  const rawMicroRemoveChild = microRootNode.prototype.removeChild
+  const rawMicroAppend = microRootElement.prototype.append
+  const rawMicroPrepend = microRootElement.prototype.prepend
+  const rawMicroInsertAdjacentElement = microRootElement.prototype.insertAdjacentElement
   const rawMicroCloneNode = microRootNode.prototype.cloneNode
+  const rawInnerHTMLDesc = Object.getOwnPropertyDescriptor(microRootElement.prototype, 'innerHTML') as PropertyDescriptor
+  const rawParentNodeDesc = Object.getOwnPropertyDescriptor(microRootNode.prototype, 'parentNode') as PropertyDescriptor
+  const rawOwnerDocumentDesc = Object.getOwnPropertyDescriptor(microRootNode.prototype, 'ownerDocument') as PropertyDescriptor
 
-  const getRawTarget = (target: Node): Node => {
-    if (target === iframeSandbox.microHead) {
+  const isPureNode = (target: unknown): boolean | void => {
+    return (isScriptElement(target) || isBaseElement(target)) && target.__PURE_ELEMENT__
+  }
+
+  const getRawTarget = (parent: Node): Node => {
+    if (parent === sandbox.microHead) {
       return rawDocument.head
-    } else if (target === iframeSandbox.microBody) {
+    } else if (parent === sandbox.microBody) {
       return rawDocument.body
     }
 
-    return target
+    return parent
   }
 
-  microRootNode.prototype.getRootNode = function getRootNode (options?: GetRootNodeOptions): Node {
-    const rootNode = rawMicroGetRootNode.call(this, options)
-    // TODO: 只有shadowDOM才有效，非情shadowDOM直接指向document
-    if (rootNode === appInstanceMap.get(appName)?.container) return microAppWindow.document
-    return rootNode
+  microRootNode.prototype.getRootNode = function getRootNode (): Node {
+    return microDocument
+    // TODO: 什么情况下返回原生document?
+    // const rootNode = rawMicroGetRootNode.call(this, options)
+    // if (rootNode === appInstanceMap.get(appName)?.container) return microDocument
+    // return rootNode
   }
 
   microRootNode.prototype.appendChild = function appendChild <T extends Node> (node: T): T {
-    updateElementInfo(node, microAppWindow, appName)
-    // TODO：只有script才可以这样拦截，link、style不应该拦截
-    if (isScriptElement(node) && node.__PURE_ELEMENT__) {
+    // TODO: 有必要执行这么多次updateElementInfo？
+    updateElementInfo(node, appName)
+    if (isPureNode(node)) {
       return rawMicroAppendChild.call(this, node)
     }
-    const _this = getRawTarget(this)
-    if (_this !== this) {
-      return _this.appendChild(node)
-    }
-    return rawMicroAppendChild.call(_this, node)
+    return rawRootElement.prototype.appendChild.call(getRawTarget(this), node)
   }
 
-  // TODO: 更多场景适配
   microRootNode.prototype.insertBefore = function insertBefore <T extends Node> (node: T, child: Node | null): T {
-    updateElementInfo(node, microAppWindow, appName)
-    // console.log(6666666, node)
-    if (isScriptElement(node) && node.__PURE_ELEMENT__) {
+    updateElementInfo(node, appName)
+    if (isPureNode(node)) {
       return rawMicroInsertBefore.call(this, node, child)
     }
-    const _this = getRawTarget(this)
-    if (_this !== this) {
-      if (child && !_this.contains(child)) {
-        return _this.appendChild(node)
-      }
-      return _this.insertBefore(node, child)
-    }
-    return rawMicroInsertBefore.call(_this, node, child)
+    return rawRootElement.prototype.insertBefore.call(getRawTarget(this), node, child)
   }
 
-  // TODO: 更多场景适配
   microRootNode.prototype.replaceChild = function replaceChild <T extends Node> (node: Node, child: T): T {
-    updateElementInfo(node, microAppWindow, appName)
-    if (isScriptElement(node) && node.__PURE_ELEMENT__) {
+    updateElementInfo(node, appName)
+    if (isPureNode(node)) {
       return rawMicroReplaceChild.call(this, node, child)
     }
-    const _this = getRawTarget(this)
-    if (_this !== this) {
-      if (child && !_this.contains(child)) {
-        _this.appendChild(node) as T
-        return child
-      }
-      return _this.replaceChild(node, child)
+    return rawRootElement.prototype.replaceChild.call(getRawTarget(this), node, child)
+  }
+
+  microRootNode.prototype.removeChild = function removeChild<T extends Node> (oldChild: T): T {
+    if (isPureNode(oldChild) || this.contains(oldChild)) {
+      return rawMicroRemoveChild.call(this, oldChild)
     }
-    return rawMicroReplaceChild.call(_this, node, child)
+    return rawRootElement.prototype.removeChild.call(getRawTarget(this), oldChild)
+  }
+
+  microRootElement.prototype.append = function append (...nodes: (Node | string)[]): void {
+    let i = 0; let hasPureNode = false
+    while (i < nodes.length) {
+      nodes[i] = isNode(nodes[i]) ? nodes[i] : microDocument.createTextNode(nodes[i])
+      if (isPureNode(nodes[i])) hasPureNode = true
+      i++
+    }
+    if (hasPureNode) {
+      return rawMicroAppend.call(this, ...nodes)
+    }
+    return rawRootElement.prototype.append.call(getRawTarget(this), ...nodes)
+  }
+
+  microRootElement.prototype.prepend = function prepend (...nodes: (Node | string)[]): void {
+    let i = 0; let hasPureNode = false
+    while (i < nodes.length) {
+      nodes[i] = isNode(nodes[i]) ? nodes[i] : microDocument.createTextNode(nodes[i])
+      if (isPureNode(nodes[i])) hasPureNode = true
+      i++
+    }
+    if (hasPureNode) {
+      return rawMicroPrepend.call(this, ...nodes)
+    }
+    return rawRootElement.prototype.prepend.call(getRawTarget(this), ...nodes)
+  }
+
+  /**
+   * The insertAdjacentElement method of the Element interface inserts a given element node at a given position relative to the element it is invoked upon.
+   * Scenes:
+   *  1. vite4 development env for style
+   */
+  microRootElement.prototype.insertAdjacentElement = function insertAdjacentElement (where: InsertPosition, element: Element): Element | null {
+    updateElementInfo(element, appName)
+    if (isPureNode(element)) {
+      return rawMicroInsertAdjacentElement.call(this, where, element)
+    }
+    return rawRootElement.prototype.insertAdjacentElement.call(getRawTarget(this), where, element)
   }
 
   // patch cloneNode
   microRootNode.prototype.cloneNode = function cloneNode (deep?: boolean): Node {
     const clonedNode = rawMicroCloneNode.call(this, deep)
-    return updateElementInfo(clonedNode, microAppWindow, appName)
+    return updateElementInfo(clonedNode, appName)
   }
+
+  rawDefineProperty(microRootNode.prototype, 'ownerDocument', {
+    configurable: true,
+    enumerable: true,
+    get () {
+      return this.__PURE_ELEMENT__ || this === microDocument
+        ? rawOwnerDocumentDesc.get!.call(this)
+        : microDocument
+    },
+  })
+
+  rawDefineProperty(microRootElement.prototype, 'innerHTML', {
+    configurable: true,
+    enumerable: true,
+    get () {
+      return rawInnerHTMLDesc.get!.call(this)
+    },
+    set (code: string) {
+      rawInnerHTMLDesc.set!.call(this, code)
+      Array.from(this.children).forEach((child) => {
+        if (isElement(child)) {
+          updateElementInfo(child, appName)
+        }
+      })
+    }
+  })
+
+  // patch parentNode
+  rawDefineProperty(microRootNode.prototype, 'parentNode', {
+    configurable: true,
+    enumerable: true,
+    get () {
+      /**
+       * set current appName for hijack parentNode of html
+       * NOTE:
+       *  1. Is there a problem with setting the current appName in iframe mode
+       */
+      throttleDeferForSetAppName(appName)
+      const result: ParentNode = rawParentNodeDesc.get!.call(this)
+      /**
+        * If parentNode is <micro-app-body>, return rawDocument.body
+        * Scenes:
+        *  1. element-ui@2/lib/utils/vue-popper.js
+        *    if (this.popperElm.parentNode === document.body) ...
+        * WARNING:
+        *  Will it cause other problems ?
+        *  e.g. target.parentNode.remove(target)
+        */
+      if (isMicroAppBody(result) && appInstanceMap.get(appName)?.container) {
+        return microApp.options.getRootElementParentNode?.(this, appName) || globalEnv.rawDocument.body
+      }
+      return result
+    }
+  })
 
   // Adapt to new image(...) scene
   const ImageProxy = new Proxy(microAppWindow.Image, {
     construct (Target, args): HTMLImageElement {
       const elementImage = new Target(...args)
-      updateElementInfo(elementImage, microAppWindow, appName)
+      updateElementInfo(elementImage, appName)
       return elementImage
     },
   })
@@ -123,19 +228,9 @@ function patchIframeNode (
     writable: true,
     value: ImageProxy,
   })
-
-  /**
-   * TODO:
-   * 1、append prepend
-   * 2、cloneNode -- 完成
-   * 3、innerHTML
-   * 4、querySelector、querySelectorAll (head, body)
-   * 5、Image -- 完成
-   * 都是Element原型链上的方法
-   */
 }
 
-function patchIframeAttribute (appName: string, url: string, microAppWindow: microAppWindowType): void {
+function patchIframeAttribute (url: string, microAppWindow: microAppWindowType): void {
   const microRootElement = microAppWindow.Element
   const rawMicroSetAttribute = microRootElement.prototype.setAttribute
 
@@ -156,6 +251,12 @@ function patchIframeAttribute (appName: string, url: string, microAppWindow: mic
     [microAppWindow.HTMLLinkElement.prototype, 'href'],
   ]
 
+  /**
+   * element.setAttribute does not trigger this actions:
+   *  1. img.src = xxx
+   *  2. script.src = xxx
+   *  3. link.href = xxx
+   */
   protoAttrList.forEach(([target, attr]) => {
     const { enumerable, configurable, get, set } = Object.getOwnPropertyDescriptor(target, attr) || {
       enumerable: true,

@@ -106,6 +106,7 @@ function Vue3 () {
           // destroy
           // inline
           // scopecss='false'
+          iframe
         >
         </micro-app>
       </div>

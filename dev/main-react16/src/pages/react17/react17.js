@@ -37,6 +37,7 @@ function React17 () {
         // destroy
         // inline
         // keep-alive
+        // iframe
       />
     </div>
   )

@@ -1,4 +1,4 @@
-/* eslint-disable no-new-func, indent, @typescript-eslint/explicit-module-boundary-types */
+/* eslint-disable no-new-func, indent, no-self-compare, @typescript-eslint/explicit-module-boundary-types */
 import type {
   Func,
   LocationQueryObject,
@@ -6,6 +6,7 @@ import type {
   MicroLocation,
   AttrsType,
   fiberTasks,
+  MicroAppElementTagNameMap,
 } from '@micro-app/types'
 
 export const version = '__MICRO_APP_VERSION__'
@@ -35,7 +36,10 @@ export const assign = Object.assign
 // Object prototype methods
 export const rawDefineProperty = Object.defineProperty
 export const rawDefineProperties = Object.defineProperties
+export const rawToString = Object.prototype.toString
 export const rawHasOwnProperty = Object.prototype.hasOwnProperty
+
+export const toTypeString = (value: unknown): string => rawToString.call(value)
 
 // is Undefined
 export function isUndefined (target: unknown): target is undefined {
@@ -69,17 +73,17 @@ export function isFunction (target: unknown): target is Function {
 
 // is PlainObject
 export function isPlainObject <T = Record<PropertyKey, unknown>> (target: unknown): target is T {
-  return toString.call(target) === '[object Object]'
+  return toTypeString(target) === '[object Object]'
 }
 
 // is Object
 export function isObject (target: unknown): target is Object {
-  return typeof target === 'object'
+  return !isNull(target) && typeof target === 'object'
 }
 
 // is Promise
 export function isPromise (target: unknown): target is Promise<unknown> {
-  return toString.call(target) === '[object Promise]'
+  return toTypeString(target) === '[object Promise]'
 }
 
 // is bind function
@@ -121,32 +125,61 @@ export function isNode (target: unknown): target is Node {
 }
 
 export function isLinkElement (target: unknown): target is HTMLLinkElement {
-  return (target as HTMLLinkElement)?.tagName?.toUpperCase() === 'LINK'
+  return toTypeString(target) === '[object HTMLLinkElement]'
 }
 
 export function isStyleElement (target: unknown): target is HTMLStyleElement {
-  return (target as HTMLStyleElement)?.tagName?.toUpperCase() === 'STYLE'
+  return toTypeString(target) === '[object HTMLStyleElement]'
 }
 
 export function isScriptElement (target: unknown): target is HTMLScriptElement {
-  return (target as HTMLScriptElement)?.tagName?.toUpperCase() === 'SCRIPT'
+  return toTypeString(target) === '[object HTMLScriptElement]'
 }
 
 export function isIFrameElement (target: unknown): target is HTMLIFrameElement {
-  return (target as HTMLIFrameElement)?.tagName?.toUpperCase() === 'IFRAME'
+  return toTypeString(target) === '[object HTMLIFrameElement]'
 }
 
 export function isDivElement (target: unknown): target is HTMLDivElement {
-  return (target as HTMLDivElement)?.tagName?.toUpperCase() === 'DIV'
+  return toTypeString(target) === '[object HTMLDivElement]'
 }
 
 export function isImageElement (target: unknown): target is HTMLImageElement {
-  return (target as HTMLImageElement)?.tagName?.toUpperCase() === 'IMG'
+  return toTypeString(target) === '[object HTMLImageElement]'
+}
+
+export function isBaseElement (target: unknown): target is HTMLBaseElement {
+  return toTypeString(target) === '[object HTMLBaseElement]'
+}
+
+export function isMicroAppBody (target: unknown): target is HTMLElement {
+  return isElement(target) && target.tagName.toUpperCase() === 'MICRO-APP-BODY'
 }
 
 // is ProxyDocument
 export function isProxyDocument (target: unknown): target is Document {
-  return toString.call(target) === '[object ProxyDocument]'
+  return toTypeString(target) === '[object ProxyDocument]'
+}
+
+export function includes (target: unknown[], searchElement: unknown, fromIndex?: number): boolean {
+  if (target == null) {
+    throw new TypeError('includes target is null or undefined')
+  }
+
+  const O = Object(target)
+  const len = parseInt(O.length, 10) || 0
+  if (len === 0) return false
+  // @ts-ignore
+  fromIndex = parseInt(fromIndex, 10) || 0
+  let i = Math.max(fromIndex >= 0 ? fromIndex : len + fromIndex, 0)
+  while (i < len) {
+    // NaN !== NaN
+    if (searchElement === O[i] || (searchElement !== searchElement && O[i] !== O[i])) {
+      return true
+    }
+    i++
+  }
+  return false
 }
 
 /**
@@ -222,13 +255,13 @@ export function formatAppURL (url: string | null, appName: string | null = null)
   if (!isString(url) || !url) return ''
 
   try {
-    const { origin, pathname, search } = createURL(addProtocol(url))
-    // If it ends with .html/.node/.php/.net/.etc, don’t need to add /
-    if (/\.(\w+)$/.test(pathname)) {
-      return `${origin}${pathname}${search}`
-    }
-    const fullPath = `${origin}${pathname}/`.replace(/\/\/$/, '/')
-    return /^https?:\/\//.test(fullPath) ? `${fullPath}${search}` : ''
+    const { origin, pathname, search } = createURL(addProtocol(url), (window.rawWindow || window).location.href)
+    /**
+     * keep the original url unchanged, such as .html .node .php .net .etc, search, except hash
+     * BUG FIX: Never using '/' to complete url, refer to https://github.com/micro-zoe/micro-app/issues/1147
+     */
+    const fullPath = `${origin}${pathname}${search}`
+    return /^https?:\/\//.test(fullPath) ? fullPath : ''
   } catch (e) {
     logError(e, appName)
     return ''
@@ -251,7 +284,9 @@ export function formatAppName (name: string | null): string {
 }
 
 /**
- * Get valid address, such as https://xxx/xx/xx.html to https://xxx/xx/
+ * Get valid address, such as
+ *  1. https://domain/xx/xx.html to https://domain/xx/
+ *  2. https://domain/xx to https://domain/xx/
  * @param url app.url
  */
 export function getEffectivePath (url: string): string {
@@ -379,23 +414,30 @@ export function setCurrentAppName (appName: string | null): void {
   currentMicroAppName = appName
 }
 
-export function throttleDeferForSetAppName (appName: string) {
-  if (currentMicroAppName !== appName) {
-    setCurrentAppName(appName)
-    defer(() => {
-      setCurrentAppName(null)
-    })
-  }
-}
-
 // get the currently running app.name
 export function getCurrentAppName (): string | null {
   return currentMicroAppName
 }
 
 // Clear appName
-export function removeDomScope (): void {
+let preventSetAppName = false
+export function removeDomScope (force?: boolean): void {
   setCurrentAppName(null)
+  if (force && !preventSetAppName) {
+    preventSetAppName = true
+    defer(() => {
+      preventSetAppName = false
+    })
+  }
+}
+
+export function throttleDeferForSetAppName (appName: string) {
+  if (currentMicroAppName !== appName && !preventSetAppName) {
+    setCurrentAppName(appName)
+    defer(() => {
+      setCurrentAppName(null)
+    })
+  }
 }
 
 // is safari browser
@@ -406,37 +448,11 @@ export function isSafari (): boolean {
 /**
  * Create pure elements
  */
-export function pureCreateElement<K extends keyof HTMLElementTagNameMap> (tagName: K, options?: ElementCreationOptions): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tagName, options)
+export function pureCreateElement<K extends keyof MicroAppElementTagNameMap> (tagName: K, options?: ElementCreationOptions): MicroAppElementTagNameMap[K] {
+  const element = (window.rawDocument || document).createElement(tagName, options)
   if (element.__MICRO_APP_NAME__) delete element.__MICRO_APP_NAME__
   element.__PURE_ELEMENT__ = true
   return element
-}
-
-/**
- * clone origin elements to target
- * @param origin Cloned element
- * @param target Accept cloned elements
- * @param deep deep clone or transfer dom
- */
-export function cloneContainer <T extends Element, Q extends Element> (
-  origin: T,
-  target: Q,
-  deep: boolean,
-): void {
-  target.innerHTML = ''
-  if (deep) {
-    const clonedNode = origin.cloneNode(true)
-    const fragment = document.createDocumentFragment()
-    Array.from(clonedNode.childNodes).forEach((node: Node | Element) => {
-      fragment.appendChild(node)
-    })
-    target.appendChild(fragment)
-  } else {
-    Array.from(origin.childNodes).forEach((node: Node | Element) => {
-      target.appendChild(node)
-    })
-  }
 }
 
 // is invalid key of querySelector
@@ -451,7 +467,8 @@ export function isUniqueElement (key: string): boolean {
     /^body$/i.test(key) ||
     /^head$/i.test(key) ||
     /^html$/i.test(key) ||
-    /^title$/i.test(key)
+    /^title$/i.test(key) ||
+    /^:root$/i.test(key)
   )
 }
 
@@ -622,21 +639,38 @@ export function isInlineScript (address: string): boolean {
  * @param appName app.name
  * @param args arguments
  */
-export function callFnWithTryCatch (
+export function execMicroAppGlobalHook (
   fn: Func | null,
   appName: string,
-  msgSuffix: string,
+  hookName: string,
   ...args: unknown[]
 ): void {
   try {
     isFunction(fn) && fn(...args)
   } catch (e) {
-    logError(`an error occurred in app ${appName} ${msgSuffix} \n`, null, e)
+    logError(`An error occurred in app ${appName} window.${hookName} \n`, null, e)
   }
 }
 
+/**
+ * remove all childNode from target node
+ * @param $dom target node
+ */
 export function clearDOM ($dom: HTMLElement | ShadowRoot | Document): void {
   while ($dom?.firstChild) {
     $dom.removeChild($dom.firstChild)
   }
+}
+
+type BaseHTMLElementType = HTMLElement & {
+  new (): HTMLElement;
+  prototype: HTMLElement;
+}
+
+/**
+ * get HTMLElement from base app
+ * @returns HTMLElement
+ */
+export function getBaseHTMLElement (): BaseHTMLElementType {
+  return (window.rawWindow?.HTMLElement || window.HTMLElement) as BaseHTMLElementType
 }

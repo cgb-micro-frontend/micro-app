@@ -6,6 +6,7 @@ import type {
   Func,
   fiberTasks,
   AttrsType,
+  microAppWindowType,
 } from '@micro-app/types'
 import { fetchSource } from './fetch'
 import {
@@ -15,7 +16,6 @@ import {
   pureCreateElement,
   defer,
   logError,
-  logWarn,
   isUndefined,
   isPlainObject,
   isArray,
@@ -32,7 +32,7 @@ import {
 } from './load_event'
 import microApp from '../micro_app'
 import globalEnv from '../libs/global_env'
-import { globalKeyToBeCached } from '../constants'
+import { GLOBAL_CACHED_KEY } from '../constants'
 import sourceCenter from './source_center'
 
 export type moduleCallBack = Func & { moduleCount?: number, errorCount?: number }
@@ -41,8 +41,7 @@ const scriptTypes = ['text/javascript', 'text/ecmascript', 'application/javascri
 
 // whether use type='module' script
 function isTypeModule (app: AppInterface, scriptInfo: ScriptSourceInfo): boolean {
-  // console.log(3333333, scriptInfo.appSpace, app.iframe)
-  return scriptInfo.appSpace[app.name].module && (!app.useSandbox || app.esmodule || app.iframe)
+  return scriptInfo.appSpace[app.name].module && (!app.useSandbox || app.iframe)
 }
 
 // special script element
@@ -64,14 +63,19 @@ function isInlineMode (app: AppInterface, scriptInfo: ScriptSourceInfo): boolean
     app.inline ||
     scriptInfo.appSpace[app.name].inline ||
     isTypeModule(app, scriptInfo) ||
-    isSpecialScript(app, scriptInfo) ||
-    app.iframe // TODO: remove
+    isSpecialScript(app, scriptInfo)
   )
 }
 
+// TODO: iframe重新插入window前后不一致，通过iframe Function创建的函数无法复用
+function getEffectWindow (app: AppInterface): microAppWindowType {
+  return app.iframe ? app.sandBox.microAppWindow : globalEnv.rawWindow
+}
+
 // Convert string code to function
-function code2Function (code: string): Function {
-  return new Function(code)
+function code2Function (app: AppInterface, code: string): Function {
+  const targetWindow = getEffectWindow(app)
+  return new targetWindow.Function(code)
 }
 
 /**
@@ -81,13 +85,13 @@ function code2Function (code: string): Function {
  * @param currentCode pure code of current address
  */
 function getExistParseResult (
-  appName: string,
+  app: AppInterface,
   scriptInfo: ScriptSourceInfo,
   currentCode: string,
 ): Function | void {
   const appSpace = scriptInfo.appSpace
   for (const item in appSpace) {
-    if (item !== appName) {
+    if (item !== app.name) {
       const appSpaceData = appSpace[item]
       if (appSpaceData.parsedCode === currentCode && appSpaceData.parsedFunction) {
         return appSpaceData.parsedFunction
@@ -105,7 +109,7 @@ function getParsedFunction (
   scriptInfo: ScriptSourceInfo,
   parsedCode: string,
 ): Function {
-  return getExistParseResult(app.name, scriptInfo, parsedCode) || code2Function(parsedCode)
+  return getExistParseResult(app, scriptInfo, parsedCode) || code2Function(app, parsedCode)
 }
 
 // Prevent randomly created strings from repeating
@@ -122,13 +126,17 @@ function setConvertScriptAttr (convertScript: HTMLScriptElement, attrs: AttrsTyp
   attrs.forEach((value, key) => {
     if ((key === 'type' && value === 'module') || key === 'defer' || key === 'async') return
     if (key === 'src') key = 'data-origin-src'
-    convertScript.setAttribute(key, value)
+    globalEnv.rawSetAttribute.call(convertScript, key, value)
   })
 }
 
 // wrap code in sandbox
 function isWrapInSandBox (app: AppInterface, scriptInfo: ScriptSourceInfo): boolean {
   return app.useSandbox && !isTypeModule(app, scriptInfo)
+}
+
+function getSandboxType (app: AppInterface, scriptInfo: ScriptSourceInfo): 'with' | 'iframe' | 'disable' {
+  return isWrapInSandBox(app, scriptInfo) ? app.iframe ? 'iframe' : 'with' : 'disable'
 }
 
 /**
@@ -140,7 +148,7 @@ function isWrapInSandBox (app: AppInterface, scriptInfo: ScriptSourceInfo): bool
  */
 export function extractScriptElement (
   script: HTMLScriptElement,
-  parent: Node,
+  parent: Node | null,
   app: AppInterface,
   isDynamic = false,
 ): any {
@@ -157,6 +165,10 @@ export function extractScriptElement (
     script.hasAttribute('ignore') ||
     checkIgnoreUrl(src, app.name)
   ) {
+    // 配置为忽略的脚本，清空 rawDocument.currentScript，避免被忽略的脚本内获取 currentScript 出错
+    if (globalEnv.rawDocument?.currentScript) {
+      delete globalEnv.rawDocument.currentScript
+    }
     return null
   } else if (
     (globalEnv.supportModuleScript && script.noModule) ||
@@ -242,7 +254,7 @@ export function extractScriptElement (
   if (isDynamic) {
     return { replaceComment }
   } else {
-    return parent.replaceChild(replaceComment!, script)
+    return parent?.replaceChild(replaceComment!, script)
   }
 }
 
@@ -320,14 +332,14 @@ export function fetchScriptsFromHtml (
       logError(err, app.name)
     }, () => {
       if (fiberScriptTasks) {
-        fiberScriptTasks.push(() => Promise.resolve(app.onLoad(wrapElement)))
+        fiberScriptTasks.push(() => Promise.resolve(app.onLoad({ html: wrapElement })))
         serialExecFiberTasks(fiberScriptTasks)
       } else {
-        app.onLoad(wrapElement)
+        app.onLoad({ html: wrapElement })
       }
     })
   } else {
-    app.onLoad(wrapElement)
+    app.onLoad({ html: wrapElement })
   }
 }
 
@@ -364,12 +376,12 @@ export function fetchScriptSuccess (
      */
     if (!appSpaceData.parsedCode) {
       appSpaceData.parsedCode = bindScope(address, app, code, scriptInfo)
-      appSpaceData.wrapInSandBox = isWrapInSandBox(app, scriptInfo)
+      appSpaceData.sandboxType = getSandboxType(app, scriptInfo)
       if (!isInlineMode(app, scriptInfo)) {
         try {
           appSpaceData.parsedFunction = getParsedFunction(app, scriptInfo, appSpaceData.parsedCode)
         } catch (err) {
-          logWarn('Something went wrong while handling preloaded resources', app.name, '\n', err)
+          logError('Something went wrong while handling preloaded resources', app.name, '\n', err)
         }
       }
     }
@@ -395,7 +407,7 @@ export function execScripts (
     // Notice the second render
     if (appSpaceData.defer || appSpaceData.async) {
       // TODO: defer和module彻底分开，不要混在一起
-      if (scriptInfo.isExternal && !scriptInfo.code && !(app.iframe && appSpaceData.module)) {
+      if (scriptInfo.isExternal && !scriptInfo.code && !isTypeModule(app, scriptInfo)) {
         deferScriptPromise.push(fetchSource(address, app.name))
       } else {
         deferScriptPromise.push(scriptInfo.code)
@@ -476,19 +488,23 @@ export function runScript (
   try {
     actionsBeforeRunScript(app)
     const appSpaceData = scriptInfo.appSpace[app.name]
-    const wrapInSandBox = isWrapInSandBox(app, scriptInfo)
+    const sandboxType = getSandboxType(app, scriptInfo)
     /**
      * NOTE:
      * 1. plugins and wrapCode will only be executed once
      * 2. if parsedCode not exist, parsedFunction is not exist
      * 3. if parsedCode exist, parsedFunction does not necessarily exist
      */
-    if (!appSpaceData.parsedCode || appSpaceData.wrapInSandBox !== wrapInSandBox) {
+    if (!appSpaceData.parsedCode || appSpaceData.sandboxType !== sandboxType) {
       appSpaceData.parsedCode = bindScope(address, app, scriptInfo.code, scriptInfo)
-      appSpaceData.wrapInSandBox = wrapInSandBox
+      appSpaceData.sandboxType = sandboxType
       appSpaceData.parsedFunction = null
     }
 
+    /**
+     * TODO: 优化逻辑
+     * 是否是内联模式应该由外部传入，这样自外而内更加统一，逻辑更加清晰
+     */
     if (isInlineMode(app, scriptInfo)) {
       const scriptElement = replaceElement || pureCreateElement('script')
       runCode2InlineScript(
@@ -500,10 +516,15 @@ export function runScript (
         callback,
       )
 
+      /**
+       * TODO: 优化逻辑
+       * replaceElement不存在说明是初始化执行，需要主动插入script
+       * 但这里的逻辑不清晰，应该明确声明是什么环境下才需要主动插入，而不是用replaceElement间接判断
+       * replaceElement还有可能是注释类型(一定是在后台执行)，这里的判断都是间接判断，不够直观
+       */
       if (!replaceElement) {
         // TEST IGNORE
         const parent = app.iframe ? app.sandBox!.microBody : app.querySelector('micro-app-body')
-
         parent?.appendChild(scriptElement)
       }
     } else {
@@ -511,6 +532,8 @@ export function runScript (
     }
   } catch (e) {
     console.error(`[micro-app from ${replaceElement ? 'runDynamicScript' : 'runScript'}] app ${app.name}: `, e, address)
+    // throw error in with sandbox to parent app
+    throw e
   }
 }
 
@@ -545,7 +568,7 @@ export function runDynamicRemoteScript (
     !isTypeModule(app, scriptInfo) && dispatchScriptOnLoadEvent()
   }
 
-  if (scriptInfo.code || (app.iframe && scriptInfo.appSpace[app.name].module)) {
+  if (scriptInfo.code || isTypeModule(app, scriptInfo)) {
     defer(runDynamicScript)
   } else {
     fetchSource(address, app.name).then((code: string) => {
@@ -596,17 +619,31 @@ function runCode2InlineScript (
   callback?: moduleCallBack,
 ): void {
   if (module) {
-    // module script is async, transform it to a blob for subsequent operations
+    globalEnv.rawSetAttribute.call(scriptElement, 'type', 'module')
     if (isInlineScript(address)) {
-      const blob = new Blob([code], { type: 'text/javascript' })
-      scriptElement.src = URL.createObjectURL(blob)
+      /**
+       * inline module script cannot convert to blob mode
+       * Issue: https://github.com/micro-zoe/micro-app/issues/805
+       */
+      scriptElement.textContent = code
     } else {
       scriptElement.src = address
     }
-    scriptElement.setAttribute('type', 'module')
     if (callback) {
-      callback.moduleCount && callback.moduleCount--
-      scriptElement.onload = callback.bind(scriptElement, callback.moduleCount === 0)
+      const onloadHandler = () => {
+        callback.moduleCount && callback.moduleCount--
+        callback(callback.moduleCount === 0)
+      }
+      /**
+       * NOTE:
+       *  1. module script will execute onload method only after it insert to document/iframe
+       *  2. we can't know when the inline module script onload, and we use defer to simulate, this maybe cause some problems
+       */
+      if (isInlineScript(address)) {
+        defer(onloadHandler)
+      } else {
+        scriptElement.onload = onloadHandler
+      }
     }
   } else {
     scriptElement.textContent = code
@@ -621,7 +658,7 @@ function runParsedFunction (app: AppInterface, scriptInfo: ScriptSourceInfo) {
   if (!appSpaceData.parsedFunction) {
     appSpaceData.parsedFunction = getParsedFunction(app, scriptInfo, appSpaceData.parsedCode!)
   }
-  appSpaceData.parsedFunction.call(window)
+  appSpaceData.parsedFunction.call(getEffectWindow(app))
 }
 
 /**
@@ -642,7 +679,7 @@ function bindScope (
   }
 
   if (isWrapInSandBox(app, scriptInfo)) {
-    return app.iframe ? `(function(window,self,global,location){;${code}\n${isInlineScript(address) ? '' : `//# sourceURL=${address}\n`}}).bind(window.__MICRO_APP_SANDBOX__.proxyWindow)(window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyLocation);` : `;(function(proxyWindow){with(proxyWindow.__MICRO_APP_WINDOW__){(function(${globalKeyToBeCached}){;${code}\n${isInlineScript(address) ? '' : `//# sourceURL=${address}\n`}}).call(proxyWindow,${globalKeyToBeCached})}})(window.__MICRO_APP_PROXY_WINDOW__);`
+    return app.iframe ? `(function(window,self,global,location){;${code}\n${isInlineScript(address) ? '' : `//# sourceURL=${address}\n`}}).call(window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyWindow,window.__MICRO_APP_SANDBOX__.proxyLocation);` : `;(function(proxyWindow){with(proxyWindow.__MICRO_APP_WINDOW__){(function(${GLOBAL_CACHED_KEY}){;${code}\n${isInlineScript(address) ? '' : `//# sourceURL=${address}\n`}}).call(proxyWindow,${GLOBAL_CACHED_KEY})}})(window.__MICRO_APP_PROXY_WINDOW__);`
   }
 
   return code

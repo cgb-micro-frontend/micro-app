@@ -4,8 +4,8 @@
     name='vue3'
     url='http://localhost:4002/micro-app/vue3/'
     :data='data'
-    macro
-    baseRoute='/vue3'
+    router-mode="state"
+    baseroute='/vue3'
   >
     <!-- destroy inline scopecss='false' -->
   </micro-app>

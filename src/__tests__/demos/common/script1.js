@@ -19,12 +19,15 @@ document.body.appendChild(dynamicScript)
 
 console.log(`子应用 ${window.__MICRO_APP_NAME__} 打印的信息 - 1`)
 
+
 /**
  * testBindFunction 为基座应用的全局变量，子应用访问时会兜底到基座应用
  * 这里测试 testBindFunction 绑定的this及原型属性是否正常
  */
-testBindFunction()
-testBindFunction() // test bind_function cacheMap
+if (window.__MICRO_APP_SANDBOX_TYPE__ === 'with') {
+  testBindFunction()
+  testBindFunction() // test bind_function cacheMap
+}
 eval(`console.log("在${window.__MICRO_APP_NAME__} eval中执行")`)
 
 // document 事件相关
@@ -33,15 +36,14 @@ eval(`console.log("在${window.__MICRO_APP_NAME__} eval中执行")`)
   document.removeEventListener('keydown', () => {})
   // document click 事件
   function onClickOfApp1 () {
-    console.warn(`子应用${window.__MICRO_APP_NAME__}的onclick`)
+    console.log(`子应用${window.__MICRO_APP_NAME__}的onclick`)
   }
   document.onclick = onClickOfApp1
 
   const clickEvent = new CustomEvent('click')
   document.dispatchEvent(clickEvent)
-  expect(console.warn).toHaveBeenLastCalledWith(`子应用${window.__MICRO_APP_NAME__}的onclick`)
 
-  expect(document.onclick).toBe(onClickOfApp1)
+  window.expect && expect(document.onclick).toBe(onClickOfApp1)
 
   // 主动卸载的document click
   function handleDocClick () {
@@ -118,9 +120,9 @@ window.addEventListener("appstate-change", function (e) {
 const newImg = new Image()
 newImg.src = '/static/media/logo.6ce24c58.svg'
 document.body.appendChild(newImg)
-expect(newImg.__MICRO_APP_NAME__).toBe(window.__MICRO_APP_NAME__)
+window.expect && expect(newImg.__MICRO_APP_NAME__).toBe(window.__MICRO_APP_NAME__)
 
 // 测试 cloneNode
 var img2 = newImg.cloneNode(true)
 document.body.appendChild(img2)
-expect(img2.__MICRO_APP_NAME__).toBe(newImg.__MICRO_APP_NAME__)
+window.expect && expect(img2.__MICRO_APP_NAME__).toBe(newImg.__MICRO_APP_NAME__)

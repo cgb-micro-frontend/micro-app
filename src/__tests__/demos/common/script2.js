@@ -8,4 +8,4 @@ const dynamicIgnoreScript = document.createElement('script')
 dynamicIgnoreScript.setAttribute('ignore', 'true')
 dynamicIgnoreScript.textContent = 'window.ignoreInjectData = 1'
 document.body.appendChild(dynamicIgnoreScript)
-expect(((0, eval)('window')).ignoreInjectData).toBe(1)
+window.expect && expect(((0, eval)('window')).ignoreInjectData).toBe(1)

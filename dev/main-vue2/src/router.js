@@ -30,14 +30,24 @@ const routes = [
     component: () => import(/* webpackChunkName: "vue3" */ './pages/vue3.vue'),
   },
   {
-    path: '/vite/*',
-    name: 'vite',
-    component: () => import(/* webpackChunkName: "vite" */ './pages/vite.vue'),
+    path: '/vite2/*',
+    name: 'vite2',
+    component: () => import(/* webpackChunkName: "vite2" */ './pages/vite2.vue'),
+  },
+  {
+    path: '/vite4/*',
+    name: 'vite4',
+    component: () => import(/* webpackChunkName: "vite4" */ './pages/vite4.vue'),
   },
   {
     path: '/angular11/*',
     name: 'angular11',
     component: () => import(/* webpackChunkName: "angular11" */ './pages/angular11.vue'),
+  },
+  {
+    path: '/angular14/*',
+    name: 'angular14',
+    component: () => import(/* webpackChunkName: "angular14" */ './pages/angular14.vue'),
   },
   {
     path: '/multiple/*',

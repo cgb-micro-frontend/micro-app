@@ -1,4 +1,9 @@
 /* eslint-disable promise/param-names */
+import {
+  rewriteConsole,
+  releaseConsole,
+  jestConsoleError,
+} from '../common/initial'
 import microApp from '../..'
 import {
   EventCenterForBaseApp,
@@ -6,8 +11,9 @@ import {
   recordDataCenterSnapshot,
   rebuildDataCenterSnapshot,
 } from '../../interact'
-import { defer } from '../../libs/utils'
-import { rewriteConsole, releaseConsole } from '../common/initial'
+import {
+  defer,
+} from '../../libs/utils'
 import CreateApp, { appInstanceMap } from '../../create_app'
 
 describe('data center', () => {
@@ -44,6 +50,11 @@ describe('data center', () => {
     releaseConsole()
   })
 
+  const nextFrame = async () => await new Promise((resolve) => {
+    defer(() => {
+      resolve(true)
+    })
+  })
   const baseApp = new EventCenterForBaseApp()
   const microApp1 = new EventCenterForMicroApp('test-app1')
   const microApp2 = new EventCenterForMicroApp('test-app2')
@@ -72,28 +83,24 @@ describe('data center', () => {
     const app2GlobalCbAutoTrigger = jest.fn()
 
     // 数据对象
-    const dataToApp1One = { info: 'data to app1 from baseApp' }
-    const dataToApp1Two = { info: 'data to app1 from baseApp' }
+    const dataToApp1Case1 = { info: 'data to app1 from baseApp' }
+    const dataToApp1Case2 = { info: 'data to app1 from baseApp' }
     const dataFromApp1 = { info: 'data from app1' }
-    const dataToApp2One = { info: 'data to app2 from baseApp' }
-    const dataToApp2Two = { info: 'data to app2 from baseApp 2' }
-    const dataFromApp2 = { info: 'data from app2' }
-    const dataFromApp2Two = { info: 'data from app2 2' }
-    const dataFromApp2Three = { info: 'data from app2 3' }
+    const dataToApp2Case1 = { info: 'data to app2 from baseApp' }
+    const dataToApp2Case2 = { info: 'data to app2 from baseApp 2' }
+    const dataFromApp2Case1 = { info: 'data from app2' }
+    const dataFromApp2Case2 = { info: 'data from app2 2' }
+    const dataFromApp2Case3 = { info: 'data from app2 3' }
     const globalData1 = { info: 'global data1' }
     const globalData2 = { info: 'global data2' }
     const globalData3 = { info: 'global data3' }
     const globalData4 = { info: 'global data4' }
 
     // dispatch是异步执行的，所以等待下一帧后执行后续操作
-    microApp2.dispatch(dataFromApp2)
-    await new Promise((resolve) => {
-      defer(() => {
-        resolve(true)
-      })
-    })
+    microApp2.dispatch(dataFromApp2Case1)
+    await nextFrame()
 
-    baseApp.setData('test-app2', dataToApp2One)
+    baseApp.setData('test-app2', dataToApp2Case1)
     baseApp.setGlobalData(globalData1)
 
     // 基座应用绑定监听
@@ -109,94 +116,89 @@ describe('data center', () => {
 
     // app2绑定监听
     microApp2.addDataListener(app2Cb)
-    microApp2.addDataListener(app2CbAutoTrigger, true)
+    microApp2.addDataListener(app2CbAutoTrigger)
     microApp2.addGlobalDataListener(app2GlobalCb)
-    microApp2.addGlobalDataListener(app2GlobalCbAutoTrigger, true)
+    microApp2.addGlobalDataListener(app2GlobalCbAutoTrigger)
+
+    // 等待自动触发
+    await nextFrame()
 
     // 自动触发
     expect(cbForApp2).not.toBeCalled()
-    expect(cbForApp2AutoTrigger).toBeCalledWith(dataFromApp2)
+    expect(cbForApp2AutoTrigger).toBeCalledWith(dataFromApp2Case1)
     expect(app2EventHandler).toBeCalled()
 
     // expect(app2Cb).not.toBeCalled()
-    expect(app2CbAutoTrigger).toBeCalledWith(dataToApp2One)
+    expect(app2CbAutoTrigger).toBeCalledWith(dataToApp2Case1)
     // expect(app2GlobalCb).not.toBeCalled()
     expect(app2GlobalCbAutoTrigger).toBeCalledWith(globalData1)
 
     // 基座向子应用app1发送数据
-    baseApp.setData('test-app1', dataToApp1One)
-    baseApp.setData('test-app1', dataToApp1One)
+    baseApp.setData('test-app1', dataToApp1Case1)
+    baseApp.setData('test-app1', dataToApp1Case1)
     baseApp.setData('test-app1', '11' as any)
-    expect(app1Cb).toBeCalledWith(dataToApp1One)
-    expect(app1CbOther).toBeCalledWith(dataToApp1One)
+    // 等待事件触发
+    await nextFrame()
+    expect(app1Cb).toBeCalledWith(dataToApp1Case1)
+    expect(app1CbOther).toBeCalledWith(dataToApp1Case1)
     expect(app1Cb).toBeCalledTimes(1)
     // 空对象
     expect(JSON.stringify(baseApp.getData('test-app1'))).toBe('{}')
-    expect(baseApp.getData('test-app1', true)).toBe(dataToApp1One)
+    expect(baseApp.getData('test-app1', true)).toStrictEqual(dataToApp1Case1)
 
     // app2向基座发送数据
     // 相同数据，或非对象数据不会触发回调
     microApp1.dispatch(dataFromApp1)
     microApp1.dispatch(dataFromApp1)
     microApp1.dispatch('11' as any)
-    await new Promise((resolve) => {
-      defer(() => {
-        resolve(true)
-      })
-    })
-    expect(console.error).toBeCalledWith('[micro-app] event-center: data must be object')
+    await nextFrame()
+    expect(jestConsoleError).toBeCalledWith('[micro-app] event-center: data must be object')
     expect(cbForApp1).toBeCalledTimes(1)
     expect(cbForApp1).toBeCalledWith(dataFromApp1)
     expect(app1EventHandler).toBeCalled()
 
     // 基座向app2发送数据
-    baseApp.setData('test-app2', dataToApp2Two)
-    expect(app2Cb).toBeCalledWith(dataToApp2Two)
-    expect(app2CbAutoTrigger).toBeCalledWith(dataToApp2Two)
+    baseApp.setData('test-app2', dataToApp2Case2)
+    await nextFrame()
+    expect(app2Cb).toBeCalledWith(dataToApp2Case2)
+    expect(app2CbAutoTrigger).toBeCalledWith(dataToApp2Case2)
 
     // 全局事件
     microApp1.setGlobalData(globalData2)
+    await nextFrame()
     expect(cbForGlobal).toBeCalledWith(globalData2)
     expect(app1Global).toBeCalledWith(globalData2)
     expect(app2GlobalCb).toBeCalledWith(globalData2)
     expect(app2GlobalCbAutoTrigger).toBeCalledWith(globalData2)
     // 通过getGlobalData直接获取数据
-    expect(microApp1.getGlobalData()).toBe(globalData2)
+    expect(microApp1.getGlobalData()).toStrictEqual(globalData2)
 
     // 基座应用卸载单个test-app2的监听
     baseApp.removeDataListener('test-app2', cbForApp2)
-    microApp2.dispatch(dataFromApp2Two)
-    await new Promise((resolve) => {
-      defer(() => {
-        resolve(true)
-      })
-    })
+    microApp2.dispatch(dataFromApp2Case2)
+    await nextFrame()
     expect(cbForApp2).not.toBeCalled()
-    expect(cbForApp2AutoTrigger).toBeCalledWith(dataFromApp2Two)
+    expect(cbForApp2AutoTrigger).toBeCalledWith(dataFromApp2Case2)
     expect(app2EventHandler).toBeCalled()
 
     cbForApp2.mockClear()
     cbForApp2AutoTrigger.mockClear()
     // 基座应用卸载所有test-app2的监听
     baseApp.clearDataListener('test-app2')
-    microApp2.dispatch(dataFromApp2Three)
-    await new Promise((resolve) => {
-      defer(() => {
-        resolve(true)
-      })
-    })
+    microApp2.dispatch(dataFromApp2Case3)
+    await nextFrame()
     expect(cbForApp2).not.toBeCalled()
     expect(cbForApp2AutoTrigger).not.toBeCalled()
     // 监听卸载，缓存数据不删除
-    expect(baseApp.getData('test-app2')).toBe(dataFromApp2Three)
+    expect(baseApp.getData('test-app2')).toStrictEqual(dataFromApp2Case3)
     expect(app2EventHandler).toBeCalled()
 
     app1Cb.mockClear()
     // app1卸载单个监听
     microApp1.removeDataListener(app1Cb)
-    baseApp.setData('test-app1', dataToApp1Two)
+    baseApp.setData('test-app1', dataToApp1Case2)
     expect(app1Cb).not.toBeCalled()
-    expect(app1CbOther).toBeCalledWith(dataToApp1Two)
+    expect(app1CbOther).toBeCalledWith(dataToApp1Case2)
 
     app1Cb.mockClear()
     app1CbOther.mockClear()
@@ -205,12 +207,13 @@ describe('data center', () => {
     expect(app1Cb).not.toBeCalled()
     expect(app1CbOther).not.toBeCalled()
     // 即便卸载所有监听，但数据缓存不清除
-    expect(microApp1.getData()).toBe(dataToApp1Two)
+    expect(microApp1.getData()).toStrictEqual(dataToApp1Case2)
 
     // 删除单个全局监听
     app1Global.mockClear()
     microApp1.removeGlobalDataListener(app1Global)
     baseApp.setGlobalData(globalData3)
+    await nextFrame()
     expect(cbForGlobal).toBeCalledWith(globalData3)
     expect(app1Global).not.toBeCalled()
     expect(app2GlobalCb).toBeCalledWith(globalData3)
@@ -223,6 +226,7 @@ describe('data center', () => {
     app2GlobalCbAutoTrigger.mockClear()
     microApp2.clearGlobalDataListener()
     baseApp.setGlobalData(globalData4)
+    await nextFrame()
     // 基座应用全局数据函数没有被清空
     expect(cbForGlobal).toBeCalledWith(globalData4)
     // 上一步已经解绑
@@ -238,6 +242,7 @@ describe('data center', () => {
     // 清空基座应用全局数据绑定
     baseApp.clearGlobalDataListener()
     baseApp.setGlobalData(globalData3)
+    await nextFrame()
     // 基座全局绑定不再执行
     expect(cbForGlobal).not.toBeCalled()
     // microApp2全局数据函数正常执行
@@ -255,23 +260,19 @@ describe('data center', () => {
     baseApp.setData(123 as any, {})
     baseApp.removeDataListener({} as any, () => {})
     baseApp.addDataListener((() => {}) as any, () => {})
-    expect(console.error).toBeCalledTimes(4)
-    expect(console.error).toBeCalledWith('[micro-app] event-center: Invalid name')
+    expect(jestConsoleError).toBeCalledTimes(4)
+    expect(jestConsoleError).toBeCalledWith('[micro-app] event-center: Invalid name')
 
     // 非正常函数
     baseApp.addDataListener('test-app1', null as any)
     baseApp.removeDataListener('test-app1', null as any)
     microApp1.removeGlobalDataListener(null as any)
     microApp1.removeDataListener('abc' as any)
-    expect(console.error).toBeCalledWith('[micro-app] event-center: Invalid callback function')
+    expect(jestConsoleError).toBeCalledWith('[micro-app] event-center: Invalid callback function')
 
     appInstanceMap.get('test-app2')!.container = null
     microApp2.dispatch({ info: '容器被清空后发送数据' })
-    await new Promise((resolve) => {
-      defer(() => {
-        resolve(true)
-      })
-    })
+    await nextFrame()
     expect(app2EventHandler).not.toBeCalled()
     appInstanceMap.delete('test-app2')
     microApp2.dispatch({ info: '应用被卸载后发送数据' })
@@ -293,10 +294,10 @@ describe('data center', () => {
 
     // 初始化子应用数据对象 - 错误的appName
     new EventCenterForMicroApp('&') // eslint-disable-line
-    expect(console.error).toHaveBeenCalledWith('[micro-app] Invalid appName &')
+    expect(jestConsoleError).toHaveBeenCalledWith('[micro-app] Invalid appName &')
 
     // 基座应用发送数据 - 错误的appName
     baseApp.setData('^', {})
-    expect(console.error).toHaveBeenCalledWith('[micro-app] event-center: Invalid name')
+    expect(jestConsoleError).toHaveBeenCalledWith('[micro-app] event-center: Invalid name')
   })
 })

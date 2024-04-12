@@ -39,6 +39,7 @@ function Angular14 () {
         // disableScopecss
         // keep-alive
         // esmodule
+        // iframe
       >
       </micro-app>
     </div>

@@ -52,3 +52,23 @@ microApp.start({
   }
 })
 ```
+
+#### 3、基座如何对子应用 document 的一些属性进行自定义代理扩展
+
+**场景：**
+
+微前端模式下，通常由基座负责设置站点标题，不希望受到子应用的干扰。   
+但是因为 microApp 对 documet 的代理处理过程，并没有处理 document.title，所以子应用中可能通过 `document.title = 'xxx'` 意外改变了基座的站点标题。   
+
+**解决方式**：
+
+*通过 customProxyDocumentProps 对 document 的属性进行自定义代理扩展*
+
+通过给title设置一个空函数，来忽略 document.title 执行
+```js
+microApp.start({
+  customProxyDocumentProperties: new Map([
+    ['title', (value) => {}]
+  ]),
+})
+```

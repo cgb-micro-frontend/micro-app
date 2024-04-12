@@ -1,54 +1,25 @@
-
 export const escape2RawWindowKeys = [
   'getComputedStyle',
   'visualViewport',
   'matchMedia',
-  'DOMParser',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
+  // 'DOMParser',
   'ResizeObserver',
-  'MutationObserver',
   'IntersectionObserver',
-  'innerHeight',
-  'outerHeight',
-  'innerWidth',
-  'outerWidth',
-  'screen',
-  'screenLeft',
-  'screenTop',
-  'screenX',
-  'screenY',
-  'fullScreen',
-  'scrollX',
-  'scrollY',
-  'pageXOffset', // same as scrollX
-  'pageYOffset', // same as scrollY
+  // 'dispatchEvent',
 ]
 
-export const scopeIframeWindowOnEvent = [
-  'onload',
-  'onbeforeunload',
-  'onunload',
-]
-
-export const scopeIframeWindowEvent = [
-  'hashchange',
-  'popstate',
-  'DOMContentLoaded',
-  'load',
-  'beforeunload',
-  'unload',
-  'unmount', // micro-app custom event
-  'appstate-change', // micro-app custom event
-]
-
-export const scopeIframeDocumentEvent = [
-  'DOMContentLoaded',
-  'readystatechange',
-]
-
-export const scopeIframeDocumentOnEvent = [
-  'onreadystatechange',
+export const escape2RawWindowRegExpKeys = [
+  /animationFrame$/i,
+  /mutationObserver$/i,
+  /height$|width$/i,
+  /offset$/i,
+  // /event$/i,
+  /selection$/i,
+  /^range/i,
+  /^screen/i,
+  /^scroll/i,
+  /X$|Y$/,
+  // /^(?:HTML\w*)?Element$/,
 ]
 
 export const uniqueDocumentElement = [
@@ -58,14 +29,6 @@ export const uniqueDocumentElement = [
   'title',
 ]
 
-export const hijackMicroLocationKeys = [
-  'host',
-  'hostname',
-  'port',
-  'protocol',
-  'origin',
-]
-
 // 有shadowRoot则代理到shadowRoot否则代理到原生document上 (属性)
 export const proxy2RawDocOrShadowKeys = [
   'childElementCount',
@@ -73,11 +36,11 @@ export const proxy2RawDocOrShadowKeys = [
   'firstElementChild',
   'firstChild',
   'lastElementChild',
-  'activeElement', // 普通元素没有 -- document或shadowRoot有
-  'fullscreenElement', // 普通元素没有 -- document或shadowRoot有
-  'pictureInPictureElement', // 普通元素没有 -- document或shadowRoot有
-  'pointerLockElement', // 普通元素没有 -- document或shadowRoot有
-  'styleSheets', // 普通元素没有 -- document或shadowRoot有
+  'activeElement', // Element not has, document or shadowRoot has
+  'fullscreenElement', // Element not has, document or shadowRoot has
+  'pictureInPictureElement', // Element not has, document or shadowRoot has
+  'pointerLockElement', // Element not has, document or shadowRoot has
+  'styleSheets', // Element not has, document or shadowRoot has
 ]
 
 // 有shadowRoot则代理到shadowRoot否则代理到原生document上 (方法)
@@ -85,10 +48,11 @@ export const proxy2RawDocOrShadowMethods = [
   'append',
   'contains',
   'replaceChildren',
-  'getSelection', // 普通元素没有 -- document或shadowRoot有
-  'elementFromPoint', // 普通元素没有 -- document或shadowRoot有
-  'elementsFromPoint', // 普通元素没有 -- document或shadowRoot有
-  'getAnimations', // 普通元素没有 -- document或shadowRoot有
+  'createRange', // Element not has, document or shadowRoot has
+  'getSelection', // Element not has, document or shadowRoot has
+  'elementFromPoint', // Element not has, document or shadowRoot has
+  'elementsFromPoint', // Element not has, document or shadowRoot has
+  'getAnimations', // Element not has, document or shadowRoot has
 ]
 
 // 直接代理到原生document上 (属性)
@@ -121,10 +85,5 @@ export const proxy2RawDocumentMethods = [
   'getElementsByTagNameNS',
   'hasFocus',
   'prepend',
-]
-
-export const globalPropertyList = [
-  'window',
-  'self',
-  'globalThis'
+  // 'dispatchEvent',
 ]

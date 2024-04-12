@@ -7,5 +7,6 @@ export default {
   'menu.angular14': 'angular14应用',
   'menu.multiple': '多个应用',
   'menu.self': '自带页面',
-  'menu.vite': 'vite应用',
+  'menu.vite2': 'vite2应用',
+  'menu.vite4': 'vite4应用',
 };

@@ -18,6 +18,9 @@ function Vue2 () {
   function mounted () {
     console.timeEnd('mounted-vue2')
     console.log('生命周期：mounted -- vue2', document.querySelector('micro-app'))
+    microApp.preFetch([
+      { name: 'my-app1', url: 'https://storage.360buyimg.com/launch/zeromock/umd-module.js', level: 3 }, // 加载资源并解析
+    ])
     hideLoading(false)
   }
 
@@ -83,10 +86,12 @@ function Vue2 () {
         // keep-alive
         // shadowDOM
         // destroy
-        // inline
+        inline
         // disable-scopecss
         // disableSandbox
         // clear-data
+        // iframe
+        router-mode='pure'
       >
       </micro-app>
     </div>

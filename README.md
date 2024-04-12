@@ -35,7 +35,7 @@ It is the lowest cost framework for accessing micro front-end, and provides a se
 micro-app has no restrictions on the front-end framework, and any framework can be used as a base application to embed any type of micro application of the framework.
 
 # How to use
-## base application
+## Base application
 **1、Install**
 ```bash
 yarn add @micro-zoe/micro-app
@@ -58,7 +58,7 @@ microApp.start()
 </template>
 ```
 
-## micro application
+## Sub application
 **Set cross-domain support in the headers of webpack-dev-server**
 ```js
 devServer: {

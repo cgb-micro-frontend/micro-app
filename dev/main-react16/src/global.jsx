@@ -3,54 +3,65 @@ import microApp, { unmountApp, unmountAllApps } from '@micro-zoe/micro-app'
 import config from './config'
 
 const prefetchConfig = [
-  {
-    name: 'vite',
-    url: `${config.vite}micro-app/vite`,
-    esmodule: true,
-    // level: 1,
-    // inline: true,
-    // 'disable-sandbox': true,
-  },
+  // {
+  //   name: 'vite2',
+  //   url: `${config.vite2}micro-app/vite2`,
+  //   level: 3,
+  //   // inline: true,
+  //   // 'disable-sandbox': true,
+  //   'default-page': '/micro-app/vite2/element-plus',
+  //   iframe: true,
+  // },
+  // {
+  //   name: 'vite4',
+  //   url: `${config.vite4}micro-app/vite4/`,
+  //   level: 3,
+  //   // inline: true,
+  //   // 'default-page': '/micro-app/vite2/element-plus',
+  //   iframe: true,
+  // },
   {
     name: 'vue2',
     url: `${config.vue2}micro-app/vue2`,
     // 'disable-scopecss': true,
     level: 3,
-    'default-page': '/micro-app/vue2/#/page2',
+    // 'default-page': '/micro-app/vue2/#/page2',
     // 'disable-patch-request': false,
+    iframe: true,
   },
   // {
   //   name: 'react16',
-  //   url: `${config.react16}micro-app/react16`,
-  //   // level: 3,
+  //   url: `${config.react16}micro-app/react16?a=1`,
+  //   level: 3,
+  //   iframe: true,
   // },
-  {
-    name: 'react17',
-    url: `${config.react17}micro-app/react17`,
-    // level: 1,
-  },
-  {
-    name: 'vue3',
-    url: `${config.vue3}micro-app/vue3`,
-    level: 3,
-  },
-  {
-    name: 'angular11',
-    url: `${config.angular11}micro-app/angular11`,
-    // level: 1,
-  },
-  {
-    name: 'angular14',
-    url: `${config.angular14}micro-app/angular14`,
-    esmodule: true,
-    // level: 1,
-  },
+  // {
+  //   name: 'react17',
+  //   url: `${config.react17}micro-app/react17`,
+  //   // level: 1,
+  // },
+  // {
+  //   name: 'vue3',
+  //   url: `${config.vue3}micro-app/vue3`,
+  //   level: 3,
+  //   iframe: true,
+  // },
+  // {
+  //   name: 'angular11',
+  //   url: `${config.angular11}micro-app/angular11`,
+  //   // level: 1,
+  // },
+  // {
+  //   name: 'angular14',
+  //   url: `${config.angular14}micro-app/angular14`,
+  //   // level: 1,
+  // },
 ]
 
 // microApp.preFetch(prefetchConfig)
 
-window['scopeKeySpe'] = 'value from base app'
-window.Vue = 'Vue from base'
+window['escapeKey3'] = 'escapeKey3 from base app'
+window.Vue = { tip: 'Vue from base' }
 
 microApp.start({
   // shadowDOM: true,
@@ -64,12 +75,17 @@ microApp.start({
   // 'disable-patch-request': true,
   // 'keep-router-state': true,
   // 'hidden-router': true,
+  // 'router-mode': 'custom',
   // esmodule: true,
   // ssr: true,
   // preFetchApps: prefetchConfig,
   // prefetchLevel: 3,
   // prefetchDelay: 10000,
   // iframe: true,
+  // getRootElementParentNode (node, appName) {
+  //   return node.parentElement
+  // },
+  // iframeSrc: 'http://localhost:3000/',
   lifeCycles: {
     created (e) {
       console.log('created 全局监听', 'name:', e.detail.name)
@@ -99,7 +115,7 @@ microApp.start({
   plugins: {
     global: [
       {
-        scopeProperties: ['scopeKey1', 'scopeKey2', 'scopeKeySpe'],
+        scopeProperties: ['scopeKeyPure1', 'scopeKey1', 'scopeKey2'],
         escapeProperties: ['escapeKey1', 'escapeKey2'],
         options: {a: 1,},
         loader(code, url, options) {
@@ -110,7 +126,7 @@ microApp.start({
     ],
     modules: {
       react16: [{
-        scopeProperties: ['scopeKey3', 'scopeKey4'],
+        scopeProperties: ['scopeKeyPure2', 'scopeKey3', 'scopeKey4'],
         escapeProperties: ['escapeKey3', 'escapeKey4'],
         // loader(code, url) {
         //   if (process.env.NODE_ENV === 'development' && code.indexOf('sockjs-node') > -1) {
@@ -128,7 +144,7 @@ microApp.start({
           return code
         }
       }],
-      vite: [{
+      vite2: [{
         escapeProperties: ['escapeKey3', 'escapeKey4'],
       }],
     }
@@ -182,12 +198,19 @@ microApp.start({
 // ----------------------分割线--测试全局方法--------------------- //
 // setTimeout(() => {
 //   unmountAllApps({
-//     destroy: true,
+//     destroy: false,
 //     clearAliveState: true,
 //   }).then(() => {
 //     console.log('unmountAllApps方法 -- 主动卸载所有应用成功')
 //   })
 // }, 10000)
+
+window.addEventListener('hashchange', (e) => {
+  // const a = document.createElement('div')
+  //   a.innerHTML = '666666666'
+  //   document.body.appendChild(a)
+  console.log('基座 hashchange', e,)
+})
 
 window.addEventListener('popstate', (e) => {
   // const a = document.createElement('div')
@@ -197,9 +220,29 @@ window.addEventListener('popstate', (e) => {
   // history.replaceState(history.state, '', location.href)
 })
 
-window.addEventListener('hashchange', (e) => {
-  // const a = document.createElement('div')
-  //   a.innerHTML = '666666666'
-  //   document.body.appendChild(a)
-  console.log('基座 hashchange', e, e.newURL, e.oldURL)
-})
+window.onpopstate = function () {
+  console.log('基座 window.onpopstate 触发')
+}
+
+window.onhashchange = function () {
+  console.log('基座 window.onhashchange 触发')
+}
+
+window.onclick = function () {
+  console.log(`基座 window.onclick`)
+}
+
+// window.addEventListener('click', function (event) {
+//   console.log(`基座`, event instanceof PointerEvent, this)
+// }, false)
+
+
+/* ---------------------- 测试unhandledrejection --------------------- */
+// window.addEventListener('unhandledrejection', (event) => {
+//   console.error(`基座Promise报错监听 -- window.addEventListener(unhandledrejection): `, event)
+//   event.preventDefault()
+// })
+
+// window.onunhandledrejection = (event) => {
+//   console.error(`基座Promise报错监听 -- window.onunhandledrejection: `, event);
+// }

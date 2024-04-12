@@ -32,10 +32,6 @@ function createSourceCenter (): SourceCenter {
   const linkList: LinkListType = new Map()
   const scriptList: ScriptListType = new Map()
 
-  // setInterval(() => {
-  //   console.log(linkList, scriptList)
-  // }, 10000);
-
   function createSourceHandler <P, T extends Map<SourceAddress, P>> (targetList: T): SourceCenter<P>['link'] | SourceCenter<LinkSourceInfo, P>['script'] {
     return {
       setInfo (address: SourceAddress, info: P): void {

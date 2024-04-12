@@ -1,6 +1,11 @@
 /* eslint-disable promise/param-names */
 import * as Utils from '../../libs/utils'
-import { rewriteConsole, releaseConsole } from '../common/initial'
+import {
+  rewriteConsole,
+  releaseConsole,
+  jestConsoleError,
+  jestConsoleWarn,
+} from '../common/initial'
 
 describe('utils', () => {
   beforeAll(() => {
@@ -13,14 +18,14 @@ describe('utils', () => {
 
   test('utils ==> logError & logWarn', () => {
     Utils.logError('msg')
-    expect(console.error).toHaveBeenLastCalledWith('[micro-app] msg')
+    expect(jestConsoleError).toHaveBeenLastCalledWith('[micro-app] msg')
     Utils.logError(new Error('123'), 'appName', 111)
-    expect(console.error).toHaveBeenLastCalledWith('[micro-app] app appName:', expect.any(Error), 111)
+    expect(jestConsoleError).toHaveBeenLastCalledWith('[micro-app] app appName:', expect.any(Error), 111)
 
     Utils.logWarn('msg')
-    expect(console.warn).toHaveBeenLastCalledWith('[micro-app] msg')
+    expect(jestConsoleWarn).toHaveBeenLastCalledWith('[micro-app] msg')
     Utils.logWarn(new Error('123'), 'appName', 111)
-    expect(console.warn).toHaveBeenLastCalledWith('[micro-app] app appName:', expect.any(Error), 111)
+    expect(jestConsoleWarn).toHaveBeenLastCalledWith('[micro-app] app appName:', expect.any(Error), 111)
   })
 
   test('call function in micro task', () => {
@@ -39,7 +44,7 @@ describe('utils', () => {
     expect(Utils.formatAppURL('')).toBe('')
     expect(Utils.formatAppURL('htt://abc')).toBe('')
     expect(Utils.formatAppURL('abc')).toBe('')
-    expect(console.error).toBeCalledWith('[micro-app]', expect.anything())
+    expect(jestConsoleError).toBeCalledWith('[micro-app]', expect.anything())
   })
 
   test('utils ==> getEffectivePath', () => {

@@ -6,14 +6,12 @@
 - 1、随着项目迭代应用越来越庞大，难以维护。
 - 2、跨团队或跨部门协作开发项目导致效率低下的问题。
 
-![microfroentend](https://img13.360buyimg.com/imagetools/jfs/t1/182098/24/20562/94562/6123569cE7a4b5bc3/f135ab0912746bd6.png ':size=750')
+![microfroentend](https://img12.360buyimg.com/imagetools/jfs/t1/16487/16/31677/95933/6523ce90F10951212/78b3cee6ce36845b.png ':size=800')
 
 ### 关于micro-app
-  在`micro-app`之前，业内已经有一些开源的微前端框架，比较流行的有2个：`single-spa`和`qiankun`。
-  
-  `single-spa`是通过监听 url change 事件，在路由变化时匹配到渲染的子应用并进行渲染，这个思路也是目前实现微前端的主流方式。同时`single-spa`要求子应用修改渲染逻辑并暴露出三个方法：`bootstrap`、`mount`、`unmount`，分别对应初始化、渲染和卸载，这也导致子应用需要对入口文件进行修改。因为`qiankun`是基于`single-spa`进行封装，所以这些特点也被`qiankun`继承下来，并且需要对webpack配置进行一些修改。
-  
-  `micro-app`并没有沿袭`single-spa`的思路，而是借鉴了WebComponent的思想，通过CustomElement结合自定义的ShadowDom，将微前端封装成一个类WebComponent组件，从而实现微前端的组件化渲染。并且由于自定义ShadowDom的隔离特性，`micro-app`不需要像`single-spa`和`qiankun`一样要求子应用修改渲染逻辑并暴露出方法，也不需要修改webpack配置，是目前市面上接入微前端成本最低的方案。
+  `micro-app`是由京东前端团队推出的一款微前端框架，它借鉴了WebComponent的思想，通过`js沙箱`、`样式隔离`、`元素隔离`、`路由隔离`模拟实现了ShadowDom的隔离特性，并结合CustomElement将微前端封装成一个类WebComponent组件，从而实现微前端的组件化渲染，旨在降低上手难度、提升工作效率。
+
+  `micro-app`和技术栈无关，也不和业务绑定，可以用于任何前端框架。
 
   ##### 概念图
   ![image](https://img10.360buyimg.com/imagetools/jfs/t1/168885/23/20790/54203/6084d445E0c9ec00e/d879637b4bb34253.png ':size=750')
@@ -22,11 +20,9 @@
 ### micro-app的优势
   #### 1、使用简单
   我们将所有功能都封装到一个类WebComponent组件中，从而实现在基座应用中嵌入一行代码即可渲染一个微前端应用。
-  
-  同时`micro-app`还提供了`js沙箱`、`样式隔离`、`元素隔离`、`预加载`、`数据通信`、`静态资源补全`等一系列完善的功能。
 
-  #### 2、零依赖
-  `micro-app`没有任何依赖，这赋予它小巧的体积和更高的扩展性。
+  #### 2、功能强大
+  `micro-app`提供了`js沙箱`、`样式隔离`、`元素隔离`、`路由隔离`、`预加载`、`数据通信`等一系列完善的功能。
 
   #### 3、兼容所有框架
-  为了保证各个业务之间独立开发、独立部署的能力，`micro-app`做了诸多兼容，在任何技术框架中都可以正常运行。
+  为了保证各个业务之间独立开发、独立部署的能力，`micro-app`做了诸多兼容，在任何前端框架中都可以正常运行。

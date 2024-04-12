@@ -17,6 +17,7 @@ export const MOCK_BASIC_HTML = `
   <script src="./script1.js"></script>
   <script src="./nomodule.js" nomodule></script>
   <script src="./module.js" type='module'></script>
+  <script src="https://storage.360buyimg.com/launch/zeromock/umd-module.js"></script>
 </body>
 </html>
 `

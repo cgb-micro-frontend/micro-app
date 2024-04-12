@@ -1,1 +1,1 @@
-console.error('my defer')
+console.log('my defer')

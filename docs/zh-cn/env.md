@@ -29,7 +29,7 @@ if (window.__MICRO_APP_ENVIRONMENT__) {
 }
 ```
 
-**步骤2:** 在子应用的入口文件的`最顶部`引入`public-path.js`
+**步骤2:** 在子应用的入口文件的**最顶部**引入`public-path.js`
 ```js
 import './public-path'
 ```
@@ -38,16 +38,16 @@ import './public-path'
 
 **描述：子应用的基础路由**
 
-详情见[路由-基础路由](/zh-cn/route?id=基础路由)一章。
+详情见[路由-基础路由](/zh-cn/native-mode?id=基础路由)一章。
 
 ### `__MICRO_APP_BASE_APPLICATION__`
 
-**描述：判断应用是否是基座应用**
+**描述：判断应用是否是主应用**
 
 在执行`microApp.start()`后此值才会生效
 
 ```js
 if (window.__MICRO_APP_BASE_APPLICATION__) {
-  console.log('我是基座应用')
+  console.log('我是主应用')
 }
 ```

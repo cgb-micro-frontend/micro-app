@@ -2,6 +2,38 @@
   <div class='page2'>
     <img src="../assets/micro-app-logo.jpeg" alt="" width="100" />
     <div class="test-btn" @click="goback">goback</div>
+    <br />
+    <br />
+    <h1>选择器</h1>
+    <el-select v-model="selectValue" placeholder="请选择">
+      <el-option
+        v-for="item in selectOptions"
+        :key="item.value"
+        :label="item.label"
+        :value="item.value">
+      </el-option>
+    </el-select>
+    <br />
+    <br />
+    <h1>下拉菜单</h1>
+    <el-dropdown trigger="click">
+      <span class="el-dropdown-link">
+        下拉菜单<i class="el-icon-arrow-down el-icon--right"></i>
+      </span>
+      <el-dropdown-menu slot="dropdown">
+        <el-dropdown-item icon="el-icon-plus">黄金糕</el-dropdown-item>
+        <el-dropdown-item icon="el-icon-circle-plus">狮子头</el-dropdown-item>
+        <el-dropdown-item icon="el-icon-circle-plus-outline">螺蛳粉</el-dropdown-item>
+        <el-dropdown-item icon="el-icon-check">双皮奶</el-dropdown-item>
+        <el-dropdown-item icon="el-icon-circle-check">蚵仔煎</el-dropdown-item>
+      </el-dropdown-menu>
+    </el-dropdown>
+    <br />
+    <br />
+    <h1>颜色选择器</h1>
+    <div class="block">
+      <el-color-picker v-model="color1"></el-color-picker>
+    </div>
     <el-form :model="ruleForm" :rules="rules" ref="ruleForm" label-width="100px" class="demo-ruleForm">
       <el-form-item label="活动名称" prop="name">
         <el-input v-model="ruleForm.name"></el-input>
@@ -62,31 +94,19 @@
     </el-dialog>
     <br />
     <br />
-    <h1>选择器</h1>
-    <el-select v-model="selectValue" placeholder="请选择">
-      <el-option
-        v-for="item in selectOptions"
-        :key="item.value"
-        :label="item.label"
-        :value="item.value">
-      </el-option>
-    </el-select>
-    <br />
-    <br />
-    <h1>下拉菜单</h1>
-    <el-dropdown trigger="click">
-      <span class="el-dropdown-link">
-        下拉菜单<i class="el-icon-arrow-down el-icon--right"></i>
+    <h1>Dialog 对话框</h1>
+    <el-button type="text" @click="dialogVisible = true">点击打开 Dialog</el-button>
+    <el-dialog
+      title="提示"
+      :visible.sync="dialogVisible"
+      width="30%"
+      :before-close="handleClose">
+      <span>这是一段信息</span>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="dialogVisible = false">取 消</el-button>
+        <el-button type="primary" @click="dialogVisible = false">确 定</el-button>
       </span>
-      <el-dropdown-menu slot="dropdown">
-        <el-dropdown-item icon="el-icon-plus">黄金糕</el-dropdown-item>
-        <el-dropdown-item icon="el-icon-circle-plus">狮子头</el-dropdown-item>
-        <el-dropdown-item icon="el-icon-circle-plus-outline">螺蛳粉</el-dropdown-item>
-        <el-dropdown-item icon="el-icon-check">双皮奶</el-dropdown-item>
-        <el-dropdown-item icon="el-icon-circle-check">蚵仔煎</el-dropdown-item>
-      </el-dropdown-menu>
-    </el-dropdown>
-
+    </el-dialog>
   </div>
 </template>
 
@@ -149,7 +169,9 @@ export default {
         value: '选项5',
         label: '北京烤鸭'
       }],
-      selectValue: ''
+      selectValue: '',
+      color1: '#409EFF',
+      dialogVisible: false
     };
   },
   created () {
@@ -160,6 +182,9 @@ export default {
     if (!window.umdGlobalKey) {
       alert('umdGlobalKey missing')
     }
+  },
+  beforeDestroy () {
+    console.log('--beforeDestroy--')
   },
   methods: {
     submitForm(formName) {
@@ -177,6 +202,13 @@ export default {
     },
     goback () {
       this.$router.back()
+    },
+    handleClose(done) {
+      this.$confirm('确认关闭？')
+        .then(_ => {
+          done();
+        })
+        .catch(_ => {});
     }
   }
 }

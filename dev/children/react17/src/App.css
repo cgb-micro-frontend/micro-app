@@ -21,6 +21,14 @@
   justify-content: center;
   font-size: calc(10px + 2vmin);
   color: #333;
+  /* test about @container */
+  container-type: inline-size; 
+}
+
+@container (max-width: 1000px) {
+  .App-header .App-link{
+    background-color: red;
+  }
 }
 
 .App-link {

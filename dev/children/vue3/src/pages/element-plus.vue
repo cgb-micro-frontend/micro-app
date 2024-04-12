@@ -337,6 +337,22 @@
     <br />
     <h1>菜单</h1>
     <div class="flex flex-wrap items-center">
+      <el-dropdown trigger="click">
+        <span class="el-dropdown-link">
+          Dropdown List<el-icon class="el-icon--right"><arrow-down /></el-icon>
+        </span>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item :icon="Plus">Action 1</el-dropdown-item>
+            <el-dropdown-item :icon="CirclePlusFilled">
+              Action 2
+            </el-dropdown-item>
+            <el-dropdown-item :icon="CirclePlus">Action 3</el-dropdown-item>
+            <el-dropdown-item :icon="Check">Action 4</el-dropdown-item>
+            <el-dropdown-item :icon="CircleCheck">Action 5</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-dropdown>
         <el-button type="primary">
           Dropdown List<el-icon class="el-icon--right"><arrow-down /></el-icon>
@@ -387,23 +403,12 @@
         <el-menu-item index="4">Orders</el-menu-item>
       </el-menu>
     </div>
-    <!-- <br />
-    <br />
-    <h1>虚拟化树形控件</h1>
-    <div>
-      <el-tree-v2 :data="treeV2Data" :props="props" :height="208" />
-    </div> -->
     <br />
     <br />
-    <h1>骨架屏</h1>
-    <div>
-      <el-skeleton />
-      <br />
-      <el-skeleton style="--el-skeleton-circle-size: 100px">
-        <template #template>
-          <el-skeleton-item variant="circle" />
-        </template>
-      </el-skeleton>
+    <h1>取色器</h1>
+    <div class="demo-color-block">
+      <span class="demonstration">With default value</span>
+      <el-color-picker v-model="color1" />
     </div>
     <br />
     <br />
@@ -429,6 +434,18 @@
         <li v-for="i in infiniteScrollCount" :key="i" class="infinite-list-item">{{ i }}</li>
       </ul>
     </div>
+    <br />
+    <br />
+    <h1>骨架屏</h1>
+    <div>
+      <el-skeleton />
+      <br />
+      <el-skeleton style="--el-skeleton-circle-size: 100px">
+        <template #template>
+          <el-skeleton-item variant="circle" />
+        </template>
+      </el-skeleton>
+    </div>
   </div>
 </template>
 
@@ -438,7 +455,14 @@ import { reactive, ref, unref } from 'vue'
 import { resetForm, submitForm } from '../utils'
 import { ClickOutside as vClickOutside, ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { ArrowDown } from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  Check,
+  CircleCheck,
+  CirclePlus,
+  CirclePlusFilled,
+  Plus,
+} from '@element-plus/icons-vue'
 
 const popoverVisible = ref(false)
 
@@ -637,6 +661,8 @@ const activeMenuIndex = ref('1')
 const handleMenuSelect = (key, keyPath) => {
   console.log(key, keyPath)
 }
+
+const color1 = ref('#409EFF')
 
 // const getTreeV2Key = (prefix, id) => {
 //   return `${prefix}-${id}`

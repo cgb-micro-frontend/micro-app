@@ -25,13 +25,13 @@ import bigImg from '../../assets/big-img.jpeg';
 // 测试umd二次渲染时全局变量是否丢失
 window.umdGlobalKey = 'umdGlobalKey'
 
-window.addEventListener('click', () => {
-  console.log('测试umd懒加载页面二次渲染全局事件 - window.click')
-})
+// window.addEventListener('click', () => {
+//   console.log('测试umd懒加载页面二次渲染全局事件 - window.click')
+// })
 
-document.addEventListener('click', () => {
-  console.log('测试umd懒加载页面二次渲染全局事件 - document.click')
-})
+// document.addEventListener('click', () => {
+//   console.log('测试umd懒加载页面二次渲染全局事件 - document.click')
+// })
 
 window.microApp?.addDataListener((data) => {
   console.log('懒加载的数据监听', data)
@@ -77,7 +77,10 @@ const Page2 = () => {
   };
 
   const testClick = () => {
-    console.log(444444444)
+    console.log('click from test button')
+    // window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    window.location.href = '/micro-app/react16/page2'
+    window.history.go(-1)
   }
 
   const showDrawer = () => {
@@ -123,7 +126,7 @@ const Page2 = () => {
   return (
     <div>
       <img src={bigImg} alt="" width="100" />
-      <div>{count}</div>
+      <div>接收数据次数：{count}</div>
       <div>
         <StyledButton>测试styled-components的样式</StyledButton >
         {/* <AButton type="primary" onClick={() => Message.success("success")}>Message</AButton> */}

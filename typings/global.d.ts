@@ -32,22 +32,20 @@ declare module '@micro-app/types' {
     args: any[],
   }
 
-  interface EffectController {
-    recordEffect(): void
-    rebuildEffect(): void
-    releaseEffect(): void
+  interface MicroAppElementTagNameMap extends HTMLElementTagNameMap {
+    'micro-app': any,
   }
 
-  interface CommonIframeEffect {
+  interface CommonEffectHook {
+    reset(): void
     record(): void
     rebuild(): void
-    release(umdMode?: boolean, preRender?: boolean): void
+    release(clearTimer?: boolean): void
   }
 
   interface SandBoxStartParams {
     umdMode: boolean
     baseroute: string
-    useMemoryRouter: boolean
     defaultPage: string
     disablePatchRequest: boolean
   }
@@ -59,33 +57,56 @@ declare module '@micro-app/types' {
     clearData: boolean
   }
 
-  interface WithSandBoxInterface {
+  interface releaseGlobalEffectParams {
+    umdMode?: boolean,
+    clearData?: boolean,
+    isPrerender?: boolean,
+    keepAlive?: boolean,
+    destroy?: boolean,
+  }
+
+  interface BaseSandboxType {
+    // Properties that can only get and set in microAppWindow, will not escape to rawWindow
+    scopeProperties: PropertyKey[]
+    // Properties that can be escape to rawWindow
+    escapeProperties: PropertyKey[]
+    // Properties newly added to microAppWindow
+    injectedKeys: Set<PropertyKey>
+    // Properties escape to rawWindow, cleared when unmount
+    escapeKeys: Set<PropertyKey>
+    // Sandbox ready state
+    sandboxReady: Promise<void>
+    // Variables that can only assigned to rawWindow
+    rawWindowScopeKeyList: PropertyKey[]
+    // Variables that can escape to rawWindow
+    staticEscapeProperties: PropertyKey[]
+    // Variables that scoped in child app
+    staticScopeProperties: PropertyKey[]
+  }
+
+  interface WithSandBoxInterface extends BaseSandboxType {
+    // proxy(microWindow)
     proxyWindow: WindowProxy
+    // child window
     microAppWindow: Window // Proxy target
     start (startParams: SandBoxStartParams): void
     stop (stopParams: SandBoxStopParams): void
-    releaseGlobalEffect (clearData?: boolean): void
+    recordAndReleaseEffect (options: releaseGlobalEffectParams, preventRecord?: boolean): void
+    // reset effect snapshot data
+    resetEffectSnapshot(): void
     // record umd snapshot before the first execution of umdHookMount
     recordEffectSnapshot (): void
     // rebuild umd snapshot before remount umd app
     rebuildEffectSnapshot (): void
+    releaseGlobalEffect (options: releaseGlobalEffectParams): void
     setRouteInfoForKeepAliveApp (): void
     removeRouteInfoForKeepAliveApp (): void
     setPreRenderState (state: boolean): void
-  }
-
-  interface SandBoxAdapter {
-    // Variables that can only assigned to rawWindow
-    escapeSetterKeyList: PropertyKey[]
-
-    // Variables that can escape to rawWindow
-    staticEscapeProperties: PropertyKey[]
-
-    // Variables that scoped in child app
-    staticScopeProperties: PropertyKey[]
-
-    // adapter for react
-    // injectReactHRMProperty (): void
+    markUmdMode(state: boolean): void
+    patchStaticElement (container: Element | ShadowRoot): void
+    actionBeforeExecScripts (container: Element | ShadowRoot): void
+    deleteIframeElement? (): void
+    setStaticAppState (state: string): void
   }
 
   type LinkSourceInfo = {
@@ -110,7 +131,7 @@ declare module '@micro-app/types' {
       attrs: Map<string, string>, // element attributes
       parsedCode?: string, // bind code
       parsedFunction?: Function | null, // code to function
-      wrapInSandBox?: boolean // use sandbox
+      sandboxType?: 'with' | 'iframe' | 'disable' // sandbox type (with, iframe, disable)
     }>
   }
 
@@ -123,13 +144,21 @@ declare module '@micro-app/types' {
   interface MountParam {
     container: HTMLElement | ShadowRoot // app container
     inline: boolean // run js in inline mode
-    useMemoryRouter: boolean // use virtual router
+    routerMode: string // virtual router mode
     defaultPage: string // default page of virtual router
     baseroute: string // route prefix, default is ''
     disablePatchRequest: boolean // prevent rewrite request method of child app
     fiber: boolean // run js in fiber mode
-    esmodule: boolean // support type='module' script
     // hiddenRouter: boolean
+  }
+
+  interface OnLoadParam {
+    html: HTMLElement,
+    // below params is only for prerender app
+    defaultPage?: string // default page of virtual router
+    routerMode?: string // virtual router mode
+    baseroute?: string // route prefix, default is ''
+    disablePatchRequest?: boolean // prevent rewrite request method of child app
   }
 
   interface UnmountParam {
@@ -149,13 +178,12 @@ declare module '@micro-app/types' {
     scopecss: boolean // whether use css scoped, default is true
     useSandbox: boolean // whether use js sandbox, default is true
     inline: boolean //  whether js runs in inline script mode, default is false
-    esmodule: boolean // support esmodule in script
     iframe: boolean // use iframe sandbox
     ssrUrl: string // html path in ssr mode
     container: HTMLElement | ShadowRoot | null // container maybe null, micro-app, shadowRoot, div(keep-alive)
     umdMode: boolean // is umd mode
     fiber: boolean // fiber mode
-    useMemoryRouter: boolean // use virtual router
+    routerMode: string // virtual router mode
     isPrefetch: boolean // whether prefetch app, default is false
     isPrerender: boolean
     prefetchLevel?: number
@@ -167,7 +195,7 @@ declare module '@micro-app/types' {
     loadSourceCode (): void
 
     // resource is loaded
-    onLoad (html: HTMLElement, defaultPage?: string, disablePatchRequest?: boolean): void
+    onLoad (onLoadParam: OnLoadParam): void
 
     // Error loading HTML
     onLoadError (e: Error): void
@@ -181,10 +209,22 @@ declare module '@micro-app/types' {
     // app rendering error
     onerror (e: Error): void
 
+    // set app state
+    setAppState (state: string): void
+
     // get app state
     getAppState (): string
 
+    // get keep-alive state
     getKeepAliveState(): string | null
+
+    parseHtmlString(htmlString: string): HTMLElement
+
+    // is app unmounted
+    isUnmounted (): boolean
+
+    // is app already hidden
+    isHidden (): boolean
 
     // actions for completely destroy
     actionsForCompletelyDestroy (): void
@@ -194,20 +234,9 @@ declare module '@micro-app/types' {
 
     // show app when connectedCallback with keep-alive
     showKeepAliveApp (container: HTMLElement | ShadowRoot): void
-  }
 
-  interface MicroAppElementType {
-    appName: AttrType // app name
-    appUrl: AttrType // app url
-
-    // Hooks for element append to documents
-    connectedCallback (): void
-
-    // Hooks for element delete from documents
-    disconnectedCallback (): void
-
-    // Hooks for element attributes change
-    attributeChangedCallback (a: 'name' | 'url', o: string, n: string): void
+    // get app lifecycle state
+    getLifeCycleState (): string
   }
 
   interface prefetchParam {
@@ -220,11 +249,14 @@ declare module '@micro-app/types' {
     'disable-scopecss'?: boolean
     'disable-sandbox'?: boolean
     inline?: boolean
-    esmodule?: boolean
     iframe?: boolean
     level?: number
+    // prerender only 👇
     'default-page'?: string
     'disable-patch-request'?: boolean
+    'router-mode'?: string
+    baseroute?: string
+    // prerender only 👆
   }
 
   // prefetch params
@@ -232,14 +264,14 @@ declare module '@micro-app/types' {
 
   // lifeCycles
   interface lifeCyclesType {
-    created(e: CustomEvent): void
-    beforemount(e: CustomEvent): void
-    mounted(e: CustomEvent): void
-    unmount(e: CustomEvent): void
-    error(e: CustomEvent): void
-    beforeshow(e: CustomEvent): void
-    aftershow(e: CustomEvent): void
-    afterhidden(e: CustomEvent): void
+    created?(e: CustomEvent): void
+    beforemount?(e: CustomEvent): void
+    mounted?(e: CustomEvent): void
+    unmount?(e: CustomEvent): void
+    error?(e: CustomEvent): void
+    beforeshow?(e: CustomEvent): void
+    aftershow?(e: CustomEvent): void
+    afterhidden?(e: CustomEvent): void
   }
 
   type AssetsChecker = (url: string) => boolean;
@@ -313,12 +345,13 @@ declare module '@micro-app/types' {
     'hidden-router'?: boolean
     'keep-alive'?: boolean
     'clear-data'?: boolean
-    esmodule?: boolean
+    'router-mode'?: string
     iframe?: boolean
     ssr?: boolean
     fiber?: boolean
     prefetchLevel?: number
     prefetchDelay?: number
+    iframeSrc?: string
   }
 
   interface OptionsType extends MicroAppConfig {
@@ -329,15 +362,32 @@ declare module '@micro-app/types' {
     fetch?: fetchType
     globalAssets?: globalAssetsType,
     excludeAssetFilter?: (assetUrl: string) => boolean
+    getRootElementParentNode?: (node: Node, appName: AppName) => void
+    customProxyDocumentProps?: Map<string | number | symbol, (value: unknown) => void>
   }
 
   // MicroApp config
   interface MicroAppBaseType {
     tagName: string
+    hasInit: boolean
     options: OptionsType
     preFetch(apps: prefetchParamList): void
     router: Router // eslint-disable-line
     start(options?: OptionsType): void
+  }
+
+  interface MicroAppElementType {
+    appName: AttrType // app name
+    appUrl: AttrType // app url
+
+    // Hooks for element append to documents
+    connectedCallback (): void
+
+    // Hooks for element delete from documents
+    disconnectedCallback (): void
+
+    // Hooks for element attributes change
+    attributeChangedCallback (a: 'name' | 'url', o: string, n: string): void
   }
 
   // special CallableFunction for interact
@@ -348,6 +398,7 @@ declare module '@micro-app/types' {
 
   interface MicroLocation extends Location, URL {
     fullPath: string
+    self: URL | Location
     [key: string]: any
   }
 
@@ -391,7 +442,7 @@ declare module '@micro-app/types' {
     replace?: boolean
   }
 
-  type navigationMethod = (to: RouterTarget) => void
+  type navigationMethod = (to: RouterTarget) => Promise<void>
 
   interface AccurateGuard {
     [appName: string]: (to: GuardLocation, from: GuardLocation) => void

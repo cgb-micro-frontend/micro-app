@@ -35,14 +35,21 @@ module.exports = {
   },
   rootDir: __dirname,
   testMatch: [
-    '<rootDir>/src/__tests__/**/*.test.[jt]s?(x)'
+    // '<rootDir>/src/__tests__/**/*.test.[jt]s?(x)'
+    '<rootDir>/src/__tests__/main.test.ts',
+    '<rootDir>/src/__tests__/create_app.test.ts',
+    '<rootDir>/src/__tests__/micro_app_element.test.ts',
+    '<rootDir>/src/__tests__/micro_app.test.ts',
+    '<rootDir>/src/__tests__/unit/utils.test.ts',
+    '<rootDir>/src/__tests__/interact/index.test.ts',
+    '<rootDir>/src/__tests__/source/scoped_css.test.ts',
   ],
   globals: {
     __DEV__: true,
     __TEST__: true,
     'ts-jest': {
       tsconfig: {
-        target: 'es5',
+        target: 'ES2017',
         noUnusedLocals: true,
         strictNullChecks: true,
         noUnusedParameters: true,

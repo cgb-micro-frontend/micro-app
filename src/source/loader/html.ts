@@ -24,7 +24,10 @@ export class HTMLLoader implements IHTMLLoader {
   public run (app: AppInterface, successCb: CallableFunction): void {
     const appName = app.name
     const htmlUrl = app.ssrUrl || app.url
-    fetchSource(htmlUrl, appName, { cache: 'no-cache' }).then((htmlStr: string) => {
+    const htmlPromise = htmlUrl.includes('.js')
+      ? Promise.resolve(`<micro-app-head><script src='${htmlUrl}'></script></micro-app-head><micro-app-body></micro-app-body>`)
+      : fetchSource(htmlUrl, appName, { cache: 'no-cache' })
+    htmlPromise.then((htmlStr: string) => {
       if (!htmlStr) {
         const msg = 'html is empty, please check in detail'
         app.onerror(new Error(msg))

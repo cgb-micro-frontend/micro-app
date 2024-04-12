@@ -9,6 +9,8 @@ import {
   removeMicroPathFromURL,
   removeMicroState,
   setMicroState,
+  isRouterModeCustom,
+  isRouterModePure,
 } from './core'
 import {
   createMicroLocation,
@@ -19,12 +21,28 @@ import {
   createMicroHistory,
   attachRouteToBrowserURL,
 } from './history'
-import { createURL } from '../../libs/utils'
-import { clearRouterWhenUnmount } from './api'
-export { router } from './api'
-export { addHistoryListener } from './event'
-export { getNoHashMicroPathFromURL } from './core'
-export { patchHistory, releasePatchHistory } from './history'
+import {
+  createURL,
+} from '../../libs/utils'
+import {
+  clearRouterWhenUnmount,
+} from './api'
+export {
+  router,
+} from './api'
+export {
+  addHistoryListener,
+} from './event'
+export {
+  getNoHashMicroPathFromURL,
+  initRouterMode,
+  isRouterModeCustom,
+  isRouterModeSearch,
+} from './core'
+export {
+  patchHistory,
+  releasePatchHistory,
+} from './history'
 
 /**
  * The router system has two operations: read and write
@@ -62,7 +80,9 @@ export function initRouteStateWithURL (
 
 /**
  * initialize browser information according to microLocation
- * called on sandbox.start or reshow of keep-alive app
+ * Scenes:
+ *  1. sandbox.start
+ *  2. reshow of keep-alive app
  */
 export function updateBrowserURLWithLocation (
   appName: string,
@@ -71,15 +91,14 @@ export function updateBrowserURLWithLocation (
 ): void {
   // update microLocation with defaultPage
   if (defaultPage) updateMicroLocation(appName, defaultPage, microLocation, 'prevent')
-  // attach microApp route info to browser URL
-  attachRouteToBrowserURL(
-    appName,
-    setMicroPathToURL(appName, microLocation),
-    setMicroState(
+  if (!isRouterModePure(appName)) {
+    // attach microApp route info to browser URL
+    attachRouteToBrowserURL(
       appName,
-      null,
-    ),
-  )
+      setMicroPathToURL(appName, microLocation),
+      setMicroState(appName, null, microLocation),
+    )
+  }
   // trigger guards after change browser URL
   autoTriggerNavigationGuard(appName, microLocation)
 }
@@ -89,7 +108,7 @@ export function updateBrowserURLWithLocation (
  * @param appName app name
  * @param url app url
  * @param microLocation location of microApp
- * @param keepRouteState keep-router-state is only used to control whether to clear the location of microApp
+ * @param keepRouteState keep-router-state is only used to control whether to clear the location of microApp, default is false
  */
 export function clearRouteStateFromURL (
   appName: string,
@@ -97,11 +116,14 @@ export function clearRouteStateFromURL (
   microLocation: MicroLocation,
   keepRouteState: boolean,
 ): void {
-  if (!keepRouteState) {
+  // TODO: keep-router-state 功能太弱，是否可以增加优先级，或者去掉
+  if (!keepRouteState && !isRouterModeCustom(appName)) {
     const { pathname, search, hash } = createURL(url)
     updateMicroLocation(appName, pathname + search + hash, microLocation, 'prevent')
   }
-  removeStateAndPathFromBrowser(appName)
+
+  removePathFromBrowser(appName)
+
   clearRouterWhenUnmount(appName)
 }
 
@@ -109,10 +131,12 @@ export function clearRouteStateFromURL (
  * remove microState from history.state and remove microPath from browserURL
  * called on sandbox.stop or hidden of keep-alive app
  */
-export function removeStateAndPathFromBrowser (appName: string): void {
-  attachRouteToBrowserURL(
-    appName,
-    removeMicroPathFromURL(appName),
-    removeMicroState(appName, globalEnv.rawWindow.history.state),
-  )
+export function removePathFromBrowser (appName: string): void {
+  if (!isRouterModePure(appName)) {
+    attachRouteToBrowserURL(
+      appName,
+      removeMicroPathFromURL(appName),
+      removeMicroState(appName, globalEnv.rawWindow.history.state),
+    )
+  }
 }

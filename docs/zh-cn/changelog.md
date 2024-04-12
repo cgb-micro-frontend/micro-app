@@ -8,20 +8,408 @@
 
 ---
 
-### 1.0.0-alpha.6
+### 1.0.0-rc.5
 
-`2022-08-18`
+`2024-2-29`
 
 - **New**
 
-  - 🆕 
+  - 🆕 新增虚拟路由系统`state`模式，用于适配更多使用场景。
 
 - **Bug Fix**
 
-  - 🐞 修复了router全局守卫参数和文档不一致的问题。
+  - 🐞 修复了iframe沙箱下`unhandledrejection`事件失效的问题，[issue 1102](https://github.com/micro-zoe/micro-app/issues/1102)、[issue 1159](https://github.com/micro-zoe/micro-app/issues/1159)。
+  - 🐞 修复了with沙箱下`keep-alive`子应用二次渲染后无法通过`microApp.router`控制跳转的问题，[issue 1115](https://github.com/micro-zoe/micro-app/issues/1115)。
+  - 🐞 修复了with沙箱下预渲染子应用路由跳转异常的问题。
+  - 🐞 修复了native路由模式下，主应用和子应用都是vue-router@4导致浏览器前进后退路由地址混乱的问题。
+  - 🐞 修复了设置`disable-memory-router`后，部分场景下子应用内部跳转失败的问题，[issue 1132](https://github.com/micro-zoe/micro-app/issues/1132)。
+  - 🐞 修复了iframe沙箱下`Aliplayer`视频播放器无法正常运行的问题。
+  - 🐞 修复了`native`、`disable-memory-router`路由模式下，主应用、子应用都是vue3导致路由冲突导航异常的问题，[issue 1148](https://github.com/micro-zoe/micro-app/issues/1148)、[issue 1132](https://github.com/micro-zoe/micro-app/issues/1132)。
+  - 🐞 修复了格式化子应用url导致部分场景下路由匹配异常的问题，[issue 1147](https://github.com/micro-zoe/micro-app/issues/1147)。
 
 - **Update**
-  - 🚀 
+
+  - 🚀 更新了路由相关文档。
+
+
+### 1.0.0-rc.4
+
+`2024-1-31`
+
+- **New**
+
+  - 🆕 新增全局配置`iframeSrc`，用于动态设置iframe沙箱的src地址。
+  - 🆕 新增micro-app元素公有变量`publicPath`、`baseRoute`，用于支持chrome插件，[PR 1052](https://github.com/micro-zoe/micro-app/pull/1052) by [raoenhui](https://github.com/raoenhui)。
+  - 🆕 新增了在iframe沙箱下对`Document.prototype.createElementNS`、`Document.prototype.createDocumentFragment`的拦截和处理。
+  - 🆕 新增了`removeDomScope`方法的配置项`force`，用于在一定时间内解除元素绑定，[issue 995](https://github.com/micro-zoe/micro-app/issues/995)。
+  - 🆕 新增了with沙箱对于`Document.prototype.createElementNS`的直接处理，规避可能存在的元素泄漏风险。
+
+- **Bug Fix**
+
+  - 🐞 修复了父应用非根目录下微应用无法正常渲染的问题，[PR 1037](https://github.com/micro-zoe/micro-app/pull/1037) by [xuhongbo](https://github.com/xuhongbo)。
+  - 🐞 修复了iframe沙箱下antd `Dropdown`、`Tooltip`等组件渲染异常的问题，[PR 1015](https://github.com/micro-zoe/micro-app/pull/1015) by [keuby](https://github.com/keuby)。
+  - 🐞 修复了micro-app url属性为相对地址时没有自动补全导致子应用渲染失败的问题，[PR 1056](https://github.com/micro-zoe/micro-app/pull/1056)。
+  - 🐞 修复了EventTarget在低版本浏览器中的兼容性问题，[issue 1064](https://github.com/micro-zoe/micro-app/issues/1064)，[issue 1065](https://github.com/micro-zoe/micro-app/issues/1065)。
+  - 🐞 修复了with沙箱在部分场景下强隔离变量`scopeProperties`通过`key in window`判断异常的问题。
+  - 🐞 修复了with沙箱在默认模式下用户自定义的强隔离变量`scopeProperties`在卸载时无法清空的问题。
+  - 🐞 修复了with沙箱子应用的`window.onpopstate`兜底到主应用导致多次执行的问题。
+  - 🐞 修复了craco子应用style元素插入顺序错误导致样式优先级混乱的问题，[issue 1071](https://github.com/micro-zoe/micro-app/issues/1071)。
+  - 🐞 修复了在部分场景下子应用重写`Array.prototype.includes`导致死循环的问题，[PR 1067](https://github.com/micro-zoe/micro-app/pull/1067) by [tinymins](https://github.com/tinymins)。
+  - 🐞 修复了在关闭虚拟路由系统时子应用域名与浏览器域名不一致的问题，[issue 937](https://github.com/micro-zoe/micro-app/issues/937)。
+
+- **Update**
+  - 🚀 虚拟路由系统升级，新增`search`、`native`、`native-scope`、`pure`模式，用于适配更多使用场景。
+  - 🚀 优化了对于iframe沙箱`Node.parentNode`的处理方式。
+  - 🚀 优化了iframe沙箱对于插件系统`escapeProperties`的支持。
+  - 🚀 更新了案例。
+
+
+### 1.0.0-rc.3
+
+`2023-12-18`
+
+- **New**
+
+  - 🆕 新增`componentMode`组件模式，micro-app支持单独运行js文件[944](https://github.com/micro-zoe/micro-app/pull/944)。
+  - 🆕 新增方法`getAppState`，用于在基座中获取子应用的状态。
+  - 🆕 新增虚拟路由系统`push`, `replace`方法对Promise的支持。
+  - 🆕 新增对于CSS循环嵌套的支持[956](https://github.com/micro-zoe/micro-app/pull/956)。
+
+- **Bug Fix**
+
+  - 🐞 修复了在非`custom`路由模式下设置baseroute导致子应用渲染失败的问题。
+  - 🐞 修复了`isObject`方法中参数为null导致错误的问题[998](https://github.com/micro-zoe/micro-app/pull/998)。
+  - 🐞 修复了子应用`onerror`事件无法触发的问题[992](https://github.com/micro-zoe/micro-app/pull/992)。
+  - 🐞 修复了iframe沙箱下子应用`Node.ownerDocument`指向错误的问题[988](https://github.com/micro-zoe/micro-app/pull/988)。
+  - 🐞 修复了with沙箱下判断MicroDocument实例时目标为null导致报错的问题[986](https://github.com/micro-zoe/micro-app/pull/986)。
+  - 🐞 修复了iframe沙箱下通过`document.head.querySelector(...)`查询元素异常的问题[984](https://github.com/micro-zoe/micro-app/pull/984)。
+  - 🐞 修复了子应用html自带元素`parentNode`指向异常的问题。
+
+- **Update**
+  - 🚀 更新with沙箱运行逻辑，异步执行初始化操作，确保不同沙箱之间逻辑一致。
+  - 🚀 优化了utils方法中元素判断的方式[998](https://github.com/micro-zoe/micro-app/pull/998)。
+  - 🚀 更新了案例。
+  
+
+### 1.0.0-rc.2
+
+`2023-10-30`
+
+- **New**
+
+  - 🆕 新增了子应用全局变量`__MICRO_APP_STATE__`，用于标记当前应用的状态。
+  - 🆕 新增了子应用document变量`__MICRO_APP_NAME__`，用于标记document所属应用。
+  - 🆕 重写了原型方法`Node.prototype.parentNode`，用于处理特殊元素parentNode的指向问题。
+
+- **Bug Fix**
+
+  - 🐞 修复了在iframe沙箱下循环嵌套的问题。
+  - 🐞 修复了在iframe沙箱下开启`inline`模式导致通过`getElementsByTagName`获取script元素失败的问题。
+
+- **Update**
+  - 🚀 优化了内存占用，在iframe沙箱模式下默认开启inline模式。
+  - 🚀 更新了官网文档。
+  
+
+### 1.0.0-rc.1
+
+`2023-10-16`
+
+- **New**
+
+  - 🆕 新增了Chrome浏览器插件`Micro-App-DevTools`，提高开发效率。
+
+- **Update**
+
+  - 🚀 完善单元测试功能。
+  - 🚀 更新了官网文档。
+
+
+### 1.0.0-rc.0
+
+`2023-09-22`
+
+- **New**
+
+  - 🆕 新增了子应用全局变量`__MICRO_APP_SANDBOX_TYPE__`，用于标记当前应用的沙箱类型。
+
+- **Bug Fix**
+
+  - 🐞 修复了在关闭沙箱后发送生命周期事件异常的问题。
+  - 🐞 修复了在部分场景下，多次执行`microApp.start`方法导致的死循环问题。
+  - 🐞 修复了`afterhidden`过早触发导致的container为空的问题。
+
+- **Update**
+
+  - 🚀 完善单元测试功能。
+  - 🚀 更新了官网文档。
+  - 🚀 发布1.0正式版。
+
+
+### 1.0.0-beta.7
+
+`2023-09-20`
+
+- **New**
+
+  - 🆕 新增了子应用内部状态`before_mount`，用于标记子应用在资源加载后和执行js前的中间状态。
+
+- **Bug Fix**
+
+  - 🐞 修复了在iframe沙箱模式下，子应用使用`monaco-editor`时代码输入框光标失效的问题。
+  - 🐞 修复了在`window.mount`为Promise时抛出的错误无法捕获的问题。
+  - 🐞 修复了在iframe沙箱模式下，子应用加载完成之前进行导航导致报错的问题。
+  - 🐞 修复了在with沙箱模式下，异步创建路由系统导致部分场景下location未定义的问题，issue [#908](https://github.com/micro-zoe/micro-app/issues/908)。
+  - 🐞 修复了在micro-app子应用开始渲染到渲染完成之前通过路由API无法控制跳转的问题。
+
+- **Update**
+
+  - 🚀 完善单元测试功能。
+  - 🚀 更新了官网文档。
+
+
+### 1.0.0-beta.6
+
+`2023-09-14`
+
+- **New**
+
+  - 🆕 新增了虚拟路由多种模式功能，新增了三种路由模式：`search`、`history`、`custom`。
+  - 🆕 新增了在预渲染时可以选择不同路由模式进行渲染的功能。
+  - 🆕 新增了全局变量`document.microAppElement`，用于获取子应用所在的`micro-app`元素。
+  
+- **Bug Fix**
+
+  - 🐞 修复了在with沙箱下子应用使用`vuedraggable`报错的问题。
+  - 🐞 修复了在iframe沙箱下子应用定义`onpopstate`、`onhashchange`会覆盖主应用方法的问题。
+  - 🐞 修复了`window.addEventListener`绑定非window对象时表现异常的问题。
+  - 🐞 修复了`document.addEventListener`绑定非document对象时表现异常的问题。
+  - 🐞 修复了在子应用初始化后`icon link`丢失的问题。
+  - 🐞 修复了通过`rawDocument`、`rawWindow`操作元素时，元素作用域绑定异常的问题。
+  - 🐞 修复了通过`document.querySelector(":root")`无法获取根元素的问题。
+
+- **Update**
+
+  - 🚀 删除了配置项`disable-memory-router`，虚拟路由不再支持关闭功能。
+  - 🚀 优化了with沙箱中特殊事件的处理方式，`onpopstate`、`onhashchange`等方法不再绑定到原生window。
+  - 🚀 优化了沙箱的架构设计及代码。
+  - 🚀 完成了部分1.0版本单元测试的功能。
+  - 🚀 更新了官网文档。
+
+
+### 1.0.0-beta.5
+
+`2023-05-23`
+
+- **Bug Fix**
+
+  - 🐞 修复了环境变量`__MICRO_APP_BASE_APPLICATION__`为undefined的问题。
+  - 🐞 修复了`vite+react`子应用接入失败的问题。
+  - 🐞 修复了通过修改name和url渲染`keep-alive`应用失败的问题。
+
+- **Update**
+
+  - 🚀 优化了部分开发案例。
+
+
+### 1.0.0-beta.4
+
+`2023-04-27`
+
+- **New**
+
+  - 🆕 新增了在iframe沙箱下支持关闭虚拟路由系统的功能。
+
+- **Bug Fix**
+
+  - 🐞 修复了在子应用还未渲染时通过虚拟路由控制子应用跳转导致浏览器URL地址修改的问题。
+  - 🐞 修复了在`keep-alive`应用隐藏后通过虚拟路由控制子应用跳转导致浏览器URL地址修改的问题。
+
+- **Update**
+
+  - 🚀 优化了部分开发案例。
+
+
+### 1.0.0-beta.3
+
+`2023-04-13`
+
+- **Bug Fix**
+
+  - 🐞 修复了在非内联模式下通过`insertAdjacentElement`插入script导致报错的问题。
+  - 🐞 修复了在关闭沙箱时`module script`远程资源被重复加载的问题。
+  - 🐞 修复了在加载资源过程中卸载`keep-alive`应用导致应用二次渲染失败的问题。
+  - 🐞 修复了在umd模式下卸载`preRender app`、`hidden keep-alive app`应用导致事件覆盖的问题。
+  
+
+### 1.0.0-beta.2
+
+`2023-04-06`
+
+- **New**
+
+  - 🆕 新增了对`insertAdjacentElement`元素方法的处理。
+  - 🆕 新增了在iframe沙箱下对`append`、`prepend`元素方法的处理。
+
+- **Bug Fix**
+
+  - 🐞 修复了异步卸载子应用时`Element.prototype.setAttribute`方法可能被重置的问题。
+  - 🐞 修复了在多层嵌套时异步卸载子应用导致应用绑定作用域异常的问题。
+  - 🐞 修复了在iframe沙箱下无法设置`document.title`的问题。
+  - 🐞 修复了在开发环境下vite4样式隔离失效的问题。
+  - 🐞 修复了在with沙箱下循环嵌套子应用无法设置`document.onclick`的问题。
+
+- **Update**
+
+  - 🚀 优化了with沙箱Document事件系统的架构设计，增加兼容性。
+  - 🚀 优化了iframe沙箱Document、Element原型方法。
+  - 🚀 优化了iframe沙箱路由相关代码。
+  - 🚀 更新了vite4的开发案例。
+  
+
+### 1.0.0-beta.1
+
+`2023-03-23`
+
+- **Bug Fix**
+
+  - 🐞 修复了主应用和子应用修改domain导致的iframe跨域问题。
+  - 🐞 修复了关闭沙箱导致onmount方法报错的问题。
+  - 🐞 修复了with沙箱环境下react的抽屉组件无法渲染的问题。
+  - 🐞 修复了with沙箱环境下重写ownerDocument导致的react事件重复触发的问题。
+
+- **Update**
+
+  - 🚀 更新了开发环境的案例。
+
+
+### 1.0.0-beta.0
+
+`2023-03-17`
+
+- **New**
+
+  - 🆕 新增了iframe沙箱功能，兼容vite等开发环境。
+  - 🆕 新增了虚拟路由系统的iframe沙箱模式。
+  - 🆕 新增了`video`、`audio`、`source`、`embed`等资源标签的自动补全功能。
+
+- **Bug Fix**
+
+  - 🐞 修复了通过`unmountApp`方法卸载预渲染应用报错的问题。
+  - 🐞 修复了主动卸载keep-alive、预渲染应用时全局事件缓存错误的问题。
+  - 🐞 修复了html静态元素无法标记和处理的问题。
+  - 🐞 修复了根元素下`parentNode`表现异常的问题。
+  - 🐞 修复了低版本浏览器不支持`String.prototype.replaceAll`的问题。
+  - 🐞 修复了忽略的脚本内获取 currentScript 出错的问题。
+  - 🐞 修复了数据通信在部分场景下快照备份数据监听函数报错的问题。
+
+- **Update**
+
+  - 🚀 优化了资源管理系统，支持多种沙箱之间动态切换，提升资源复用效率。
+  - 🚀 移除了`esmodule`配置，iframe沙箱环境下默认开启。
+  - 🚀 优化了预加载、预渲染相关功能，增加用户体验。
+  - 🚀 优化了umd模式下对子应用定时器的处理逻辑。
+
+
+### 1.0.0-alpha.10
+
+`2022-10-11`
+
+- **Bug Fix**
+
+  - 🐞 修复了innerHTML创建的元素无法被拦截的问题。
+  - 🐞 修复了循环嵌套下，根元素的parentNode被多次重写导致parentNode指向错误的问题。
+
+- **Update**
+  - 🚀 优化了相关案例。
+
+
+### 1.0.0-alpha.9
+
+`2022-09-09`
+
+- **Bug Fix**
+
+  - 🐞 修复了angular框架下，micro-app设置动态url导致应用多次渲染的问题。
+  - 🐞 修复了子应用title、meta元素丢失的问题。
+  - 🐞 修复了部分场景下`scopeProperties`可以逃逸的问题。
+  - 🐞 修复了关闭虚拟路由系统时keep-alive应用依然可以触发虚拟路由系统的问题。
+
+- **Update**
+
+  - 🚀 增加对document的缓存，优化沙箱性能。
+  - 🚀 更新了title元素的处理逻辑，子应用的title元素兜底到主应用，确保title全局唯一。
+
+
+### 1.0.0-alpha.8
+
+`2022-09-02`
+
+- **New**
+
+  - 🆕 新增了预渲染的功能，提升首次渲染速度。
+  - 🆕 新增了rollup中__DEV__配置，优化开发体验。
+  - 🆕 更新了`getActiveApps`方法，增加参数`excludePreRender`。
+  - 🆕 更新了`attachAllToURL`方法，增加参数`includePreRender`。
+
+- **Bug Fix**
+
+  - 🐞 修复了在部分场景下，子应用卸载后删除元素导致removeChild方法被循环调用的问题。
+  - 🐞 修复了UMD模式下，二次渲染时document全局事件无法自动卸载的问题。
+  - 🐞 修复了keep-alive模式下，子应用隐藏后全局事件无法自动卸载导致元素作用域异常绑定的问题。
+
+- **Update**
+
+  - 🚀 优化了数据通讯系统，增加回调函数的返回值。
+  - 🚀 优化了预加载逻辑，减小对主应用性能的影响。
+
+
+### 1.0.0-alpha.7
+
+`2022-08-26`
+
+- **New**
+
+  - 🆕 新增了`reload`方法，用于手动重新加载子应用。
+  - 🆕 新增了`renderApp`方法，用于手动渲染子应用。
+  - 🆕 新增了子应用全局事件`onmount`、`onunmount`，用于监听子应用的渲染与卸载。
+  - 🆕 新增了`clear-data`配置，用于在卸载时清空数据通讯中的缓存数据。
+
+- **Bug Fix**
+
+  - 🐞 修复了ElementUI下拉选框在局部刷新时选择框无法消失的问题。
+
+- **Update**
+
+  - 🚀 优化了destroy的逻辑，卸载时主动清空数据通讯中的缓存数据。
+  - 🚀 优化了数据通信系统，合并新旧值，增加强制更新API和防抖处理。
+
+
+### 1.0.0-alpha.6
+
+`2022-08-19`
+
+- **New**
+
+  - 🆕 重构了资源管理系统，提升资源复用率。
+  - 🆕 新增了`excludeAssetFilter`配置，用于指定部分特殊的动态加载的微应用资源（css/js) 不被 micro-app 劫持处理。
+  - 🆕 新增了`fiber`配置，支持子应用以fiber模式运行，增加主应用的响应速度。
+
+
+- **Bug Fix**
+
+  - 🐞 修复了sourceMap地址丢失，导致调试困难的问题。
+  - 🐞 修复了document.defaultView可以获取真实window的问题。
+  - 🐞 修复了document.currentScript丢失的问题。
+  - 🐞 修复了动态script标签二次渲染时执行顺序错误的问题。
+  - 🐞 修复了angular13、14及vue-cli5 build后应用沙箱失效的问题。
+  - 🐞 修复了全局路由守卫参数与文档不一致的问题。
+  - 🐞 修复了micro-app在vue keep-alive环境下频繁渲染的问题。
+
+- **Update**
+
+  - 🚀 优化了预加载逻辑，提升预加载子应用的渲染速度。
+  - 🚀 优化了sandbox、create_app相关代码。
 
 
 ### 1.0.0-alpha.5
@@ -30,15 +418,15 @@
 
 - **New**
 
-  - 🆕 新增子应用全局钩子函数mount, unmount，简化接入步骤。
+  - 🆕 新增子应用全局钩子函数`mount`, `unmount`，简化接入步骤。
 
 - **Update**
-  - 🚀 更新了1.0版本文档。
+  - 🚀 更新了1.0版本文档
 
 
 ### 1.0.0-alpha.4
 
-`2022-07-30`
+`2022-07-28`
 
 - **New**
 
@@ -63,7 +451,7 @@
 
 - **New**
 
-  - 🆕 重写了基座的`pushState`、`replaceState`方法，自动将子应用的路由信息同步到浏览器地址。
+  - 🆕 重写了主应用的`pushState`、`replaceState`方法，自动将子应用的路由信息同步到浏览器地址。
   - 🆕 重写了子应用的`Document`对象，每个子应用拥有单独的Document实例。
 
 - **Bug Fix**
@@ -83,7 +471,7 @@
 - **New**
 
   - 🆕 新增了`attachToURL`、`attachAllToURL`方法，用于将子应用的路由信息同步到浏览器地址。
-  - 🆕 新增了`setBaseRouter`、`getBaseRouter`方法，用于注册和使用基座路由。
+  - 🆕 新增了`setBaseRouter`、`getBaseRouter`方法，用于注册和使用主应用路由。
   - 🆕 新增了`ProxyDocument`，为子应用创建一个虚拟的document对象。
 
 - **Bug Fix**
@@ -117,21 +505,6 @@
   - 🚀 优化了资源加载相关代码和逻辑。
 
 
-### 0.8.6
-
-`2022-06-30`
-
-- **New**
-
-  - 🆕 在 plugin 中增加 excludeChecker 和 ignoreChecker 用于主应用主动忽略子应用部分 script 和 link。
-  - 🆕 新增了`processHtml`，用于在插件中处理html。
-
-- **Update**
-
-  - 🚀 优化了资源加载相关代码和逻辑。
-  - 🚀 优化了单元测试相关代码。
-
-
 ### 1.0.0-alpha.0
 
 `2022-06-30`
@@ -147,6 +520,48 @@
 - **Update**
 
   - 🚀 优化了预加载相关代码和逻辑，提高并行渲染能力。
+
+
+### 0.8.10
+
+`2022-08-19`
+
+- **New**
+
+  - 🆕 新增了`excludeAssetFilter`配置，用于指定部分特殊的动态加载的微应用资源（css/js) 不被 micro-app 劫持处理。
+
+
+### 0.8.9
+
+`2022-08-15`
+
+- **Bug Fix**
+
+  - 🐞 修复了在umd模式下异常清空全局变量的问题。
+
+
+### 0.8.8
+
+`2022-07-15`
+
+- **Bug Fix**
+
+  - 🐞 修复systemjs的script标签src没有自动补全的问题 
+
+
+### 0.8.6
+
+`2022-06-30`
+
+- **New**
+
+  - 🆕 在 plugin 中增加 excludeChecker 和 ignoreChecker 用于主应用主动忽略子应用部分 script 和 link。
+  - 🆕 新增了`processHtml`，用于在插件中处理html。
+
+- **Update**
+
+  - 🚀 优化了资源加载相关代码和逻辑。
+  - 🚀 优化了单元测试相关代码。
 
 
 ### 0.8.5
@@ -191,11 +606,11 @@
 
 - **Bug Fix**
 
-  - 🐞 修复了基座通过远程连接引入Vue，加载vue子应用报错的问题，issue [#234](https://github.com/micro-zoe/micro-app/issues/234)。
+  - 🐞 修复了主应用通过远程连接引入Vue，加载vue子应用报错的问题，issue [#234](https://github.com/micro-zoe/micro-app/issues/234)。
 
 - **Update**
 
-  - 🚀 优化了预加载相关代码和逻辑，减小对基座项目的影响。
+  - 🚀 优化了预加载相关代码和逻辑，减小对主应用项目的影响。
 
 
 ### 0.8.1
@@ -413,7 +828,7 @@
 - **New**
 
   - 🆕 新增了ignore属性，用于忽略部分部分元素
-  - 🆕 新增了全局变量 `__MICRO_APP_BASE_APPLICATION__` 用于标记当前应用为基座应用
+  - 🆕 新增了全局变量 `__MICRO_APP_BASE_APPLICATION__` 用于标记当前应用为主应用
 
 - **Bug Fix**
 
@@ -479,7 +894,7 @@
 - **Update**
 
   - 🚀 优化了修改name&url属性切换应用的操作，部分场景下被替换的应用可以计入缓存
-  - 🚀 更新了全局数据通信卸载机制，基座应用和子应用只能卸载自身的全局监听函数
+  - 🚀 更新了全局数据通信卸载机制，主应用和子应用只能卸载自身的全局监听函数
 
 
 ### 0.2.5
@@ -488,7 +903,7 @@
 
 - **New**
 
-  - 🆕 新增了`main-vue3-vite`基座应用案例
+  - 🆕 新增了`main-vue3-vite`主应用案例
 
 - **Bug Fix**
 

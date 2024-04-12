@@ -126,8 +126,8 @@ class CSSParser {
     return true
   }
 
-  private matchAllDeclarations (): void {
-    let cssValue = (this.commonMatch(/^(?:url\(["']?(?:[^)"'}]+)["']?\)|[^}/])*/, true) as RegExpExecArray)[0]
+  private matchAllDeclarations (nesting = 1): void {
+    let cssValue = (this.commonMatch(/^(?:url\(["']?(?:[^)"'}]+)["']?\)|[^{}/])*/, true) as RegExpExecArray)[0]
 
     if (cssValue) {
       if (
@@ -135,7 +135,7 @@ class CSSParser {
         (!this.scopecssDisable || this.scopecssDisableSelectors.length)
       ) {
         cssValue = cssValue.replace(/url\(["']?([^)"']+)["']?\)/gm, (all, $1) => {
-          if (/^((data|blob):|#)/.test($1) || /^(https?:)?\/\//.test($1)) {
+          if (/^((data|blob):|#|%23)/.test($1) || /^(https?:)?\/\//.test($1)) {
             return all
           }
 
@@ -154,23 +154,37 @@ class CSSParser {
     // reset scopecssDisableNextLine
     this.scopecssDisableNextLine = false
 
-    if (!this.cssText || this.cssText.charAt(0) === '}') return
+    if (!this.cssText) return
 
-    // extract comments in declarations
-    if (this.cssText.charAt(0) === '/' && this.cssText.charAt(1) === '*') {
-      this.matchComments()
-    } else {
-      this.commonMatch(/\/+/)
+    if (this.cssText.charAt(0) === '}') {
+      if (!nesting) return
+      if (nesting > 1) {
+        this.commonMatch(/}+/)
+      }
+      return this.matchAllDeclarations(nesting - 1)
     }
 
-    return this.matchAllDeclarations()
+    // extract comments in declarations
+    if (this.cssText.charAt(0) === '/') {
+      if (this.cssText.charAt(1) === '*') {
+        this.matchComments()
+      } else {
+        this.commonMatch(/\/+/)
+      }
+    }
+
+    if (this.cssText.charAt(0) === '{') {
+      this.commonMatch(/{+\s*/)
+      nesting++
+    }
+
+    return this.matchAllDeclarations(nesting)
   }
 
   private matchAtRule (): boolean | void {
     if (this.cssText[0] !== '@') return false
     // reset scopecssDisableNextLine
     this.scopecssDisableNextLine = false
-
     return this.keyframesRule() ||
       this.mediaRule() ||
       this.customMediaRule() ||
@@ -178,6 +192,7 @@ class CSSParser {
       this.importRule() ||
       this.charsetRule() ||
       this.namespaceRule() ||
+      this.containerRule() ||
       this.documentRule() ||
       this.pageRule() ||
       this.hostRule() ||
@@ -274,8 +289,10 @@ class CSSParser {
   private charsetRule = this.createMatcherForNoneBraceAtRule('charset')
   // https://developer.mozilla.org/en-US/docs/Web/API/CSSNamespaceRule
   private namespaceRule = this.createMatcherForNoneBraceAtRule('namespace')
+  // https://developer.mozilla.org/en-US/docs/Web/CSS/@container
+  private containerRule = this.createMatcherForRuleWithChildRule(/^@container *([^{]+)/, '@container')
 
-  // common matcher for @media, @supports, @document, @host, :global
+  // common matcher for @media, @supports, @document, @host, :global, @container
   private createMatcherForRuleWithChildRule (reg: RegExp, name: string): () => boolean | void {
     return () => {
       if (!this.commonMatch(reg)) return false

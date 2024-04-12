@@ -54,6 +54,9 @@ function createDts () {
     if (isDirectory(typingsDir)) {
       addReference(typingsDir)
     }
+    const dtsCode = fs.readFileSync(outPath, 'utf-8')
+    const parsedCode = dtsCode.replace(/import type/g, 'import')
+    fs.writeFileSync(outPath, parsedCode)
   } catch (e) {
     console.log(
       chalk.red('生成*.d.ts文件失败'),

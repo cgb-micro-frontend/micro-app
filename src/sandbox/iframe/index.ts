@@ -2,10 +2,13 @@ import type {
   microAppWindowType,
   MicroLocation,
   SandBoxStartParams,
-  CommonIframeEffect,
+  CommonEffectHook,
   SandBoxStopParams,
+  releaseGlobalEffectParams,
   plugins,
 } from '@micro-app/types'
+import globalEnv from '../../libs/global_env'
+import microApp from '../../micro_app'
 import {
   getEffectivePath,
   removeDomScope,
@@ -14,151 +17,194 @@ import {
   clearDOM,
   isPlainObject,
   isArray,
+  defer,
+  createURL,
 } from '../../libs/utils'
 import {
   EventCenterForMicroApp,
   rebuildDataCenterSnapshot,
   recordDataCenterSnapshot,
+  resetDataCenterSnapshot,
 } from '../../interact'
-import globalEnv from '../../libs/global_env'
 import {
-  patchIframeRoute,
-} from './route'
+  patchRouter,
+} from './router'
 import {
   router,
   initRouteStateWithURL,
   clearRouteStateFromURL,
   addHistoryListener,
-  removeStateAndPathFromBrowser,
+  removePathFromBrowser,
   updateBrowserURLWithLocation,
   patchHistory,
   releasePatchHistory,
+  isRouterModeCustom,
 } from '../router'
-import {
-  createMicroLocation,
-} from '../router/location'
-import bindFunctionToRawTarget from '../bind_function'
-import {
-  globalPropertyList,
-} from './special_key'
 import {
   patchElementAndDocument,
   releasePatchElementAndDocument,
 } from '../../source/patch'
 import {
-  patchIframeWindow,
+  patchWindow,
 } from './window'
 import {
-  patchIframeDocument,
+  patchDocument,
 } from './document'
 import {
-  patchIframeElement,
+  patchElement,
 } from './element'
-import microApp from '../../micro_app'
+import {
+  patchElementTree
+} from '../adapter'
 
 export default class IframeSandbox {
   static activeCount = 0 // number of active sandbox
-  public iframe: HTMLIFrameElement
+  private active = false
+  private windowEffect!: CommonEffectHook
+  private documentEffect!: CommonEffectHook
+  private removeHistoryListener!: CallableFunction
+  // Properties that can be escape to rawWindow
+  public escapeProperties: PropertyKey[] = []
+  // Properties escape to rawWindow, cleared when unmount
+  public escapeKeys = new Set<PropertyKey>()
+  public deleteIframeElement: () => void
+  public iframe!: HTMLIFrameElement | null
+  // Promise used to mark whether the sandbox is initialized
   public sandboxReady!: Promise<void>
+  public proxyWindow: WindowProxy & microAppWindowType
   public microAppWindow: microAppWindowType
   public proxyLocation!: MicroLocation
-  public proxyWindow: WindowProxy & microAppWindowType
   public baseElement!: HTMLBaseElement
   public microHead!: HTMLHeadElement
   public microBody!: HTMLBodyElement
-  private active = false
-  private windowEffect!: CommonIframeEffect
-  private documentEffect!: CommonIframeEffect
-  private removeHistoryListener!: CallableFunction
-  // Properties that can be escape to rawWindow
-  private escapeProperties: PropertyKey[] = []
-  // Properties escape to rawWindow, cleared when unmount
-  private escapeKeys = new Set<PropertyKey>()
+  // TODO: 放到 super中定义，super(appName, url)，with沙箱也需要简化
+  public appName: string
+  public url: string
 
   constructor (appName: string, url: string) {
+    this.appName = appName
+    this.url = url
     const rawLocation = globalEnv.rawWindow.location
     const browserHost = rawLocation.protocol + '//' + rawLocation.host
 
-    const childStaticLocation = new URL(url) as MicroLocation
-    const childHost = childStaticLocation.protocol + '//' + childStaticLocation.host
-    const childFullPath = childStaticLocation.pathname + childStaticLocation.search + childStaticLocation.hash
-
-    this.iframe = pureCreateElement('iframe')
-    const iframeAttrs: Record<string, string> = {
-      src: browserHost,
-      style: 'display: none',
-      name: appName,
-    }
-    Object.keys(iframeAttrs).forEach((key) => this.iframe.setAttribute(key, iframeAttrs[key]))
-
-    globalEnv.rawDocument.body.appendChild(this.iframe)
-
-    this.microAppWindow = this.iframe.contentWindow
-
-    // TODO: 优化代码
-    // exec before initStaticGlobalKeys
-    this.createProxyLocation(
-      appName,
-      url,
-      this.microAppWindow,
-      childStaticLocation,
-      browserHost,
-      childHost,
-    )
-
-    this.createProxyWindow(
-      appName,
-      this.microAppWindow,
-    )
-
-    this.initStaticGlobalKeys(appName, url)
-    // get escapeProperties from plugins
-    this.getSpecialProperties(appName)
+    this.deleteIframeElement = this.createIframeElement(appName, browserHost + rawLocation.pathname)
+    this.microAppWindow = this.iframe!.contentWindow
 
     this.patchIframe(this.microAppWindow, (resolve: CallableFunction) => {
+      // create new html to iframe
       this.createIframeTemplate(this.microAppWindow)
-      patchIframeRoute(appName, this.microAppWindow, childFullPath)
-      this.windowEffect = patchIframeWindow(appName, this.microAppWindow)
-      this.documentEffect = patchIframeDocument(appName, this.microAppWindow, this.proxyLocation)
-      patchIframeElement(appName, url, this.microAppWindow, this)
+      // get escapeProperties from plugins
+      this.getSpecialProperties(appName)
+      // patch location & history of child app
+      this.proxyLocation = patchRouter(appName, url, this.microAppWindow, browserHost)
+      // patch window of child app
+      this.windowEffect = patchWindow(appName, this.microAppWindow, this)
+      // patch document of child app
+      this.documentEffect = patchDocument(appName, this.microAppWindow, this)
+      // patch Node & Element of child app
+      patchElement(appName, url, this.microAppWindow, this)
+      /**
+       * create static properties
+       * NOTE:
+       *  1. execute as early as possible
+       *  2. run after patchRouter & createProxyWindow
+       */
+      this.initStaticGlobalKeys(appName, url, this.microAppWindow)
       resolve()
+    })
+  }
+
+  /**
+   * create iframe for sandbox
+   * @param appName app name
+   * @param browserPath browser origin
+   * @returns release callback
+   */
+  createIframeElement (
+    appName: string,
+    browserPath: string,
+  ): () => void {
+    this.iframe = pureCreateElement('iframe')
+
+    const iframeAttrs: Record<string, string> = {
+      src: microApp.options.iframeSrc || browserPath,
+      style: 'display: none',
+      id: appName,
+    }
+
+    Object.keys(iframeAttrs).forEach((key) => this.iframe!.setAttribute(key, iframeAttrs[key]))
+
+    // effect action during construct
+    globalEnv.rawDocument.body.appendChild(this.iframe)
+
+    /**
+     * If dom operated async when unmount, premature deletion of iframe will cause unexpected problems
+     * e.g.
+     *  1. antd: notification.destroy()
+     * WARNING:
+     *  If async operation time is too long, defer cannot avoid the problem
+     * TODO: more test
+     */
+    return () => defer(() => {
+      // default mode or destroy, iframe will be deleted when unmount
+      this.iframe?.parentNode?.removeChild(this.iframe)
+      this.iframe = null
     })
   }
 
   public start ({
     baseroute,
-    useMemoryRouter,
     defaultPage,
     disablePatchRequest,
   }: SandBoxStartParams): void {
-    if (!this.active) {
-      this.active = true
-      // TODO: 虚拟路由升级
-      if (useMemoryRouter) {
-        this.initRouteState(defaultPage)
-        // unique listener of popstate event for sub app
-        this.removeHistoryListener = addHistoryListener(
-          this.microAppWindow.__MICRO_APP_NAME__,
-        )
-      } else {
-        this.microAppWindow.__MICRO_APP_BASE_ROUTE__ = this.microAppWindow.__MICRO_APP_BASE_URL__ = baseroute
-      }
+    if (this.active) return
+    this.active = true
+    /* --- memory router part --- start */
+    /**
+     * Sync router info to iframe when exec sandbox.start with disable or enable memory-router
+     * e.g.:
+     *  vue-router@4.x get target path by remove the base section from rawLocation.pathname
+     *  code: window.location.pathname.slice(base.length) || '/'; (base is baseroute)
+     * NOTE:
+     *  1. iframe router and browser router are separated, we should update iframe router manually
+     *  2. withSandbox location is browser location when disable memory-router, so no need to do anything
+     */
+    /**
+     * TODO:
+     * 1. iframe关闭虚拟路由系统后，default-page无法使用，推荐用户直接使用浏览器地址控制首页渲染
+     *    补充：keep-router-state 也无法配置，因为keep-router-state一定为true。
+     * 2. 导航拦截、current.route 可以正常使用
+     * 3. 可以正常控制子应用跳转，方式还是自上而下(也可以是子应用内部跳转，这种方式更好一点，减小对基座的影响，不会导致vue的循环刷新)
+     * 4. 关闭虚拟路由以后会对应 route-mode='custom' 模式，包括with沙箱也会这么做
+     * 5. 关闭虚拟路由是指尽可能模拟没有虚拟路由的情况，子应用直接获取浏览器location和history，控制浏览器跳转
+     */
+    this.initRouteState(defaultPage)
 
-      /**
-       * delete baseElement, prevent address completion through baseElement
-       * Waring:
-       *  1. This will also affect a, image, link and script
-       */
-      if (disablePatchRequest) {
-        this.baseElement?.parentNode?.removeChild(this.baseElement)
-      }
+    // unique listener of popstate event for child app
+    this.removeHistoryListener = addHistoryListener(
+      this.microAppWindow.__MICRO_APP_NAME__,
+    )
 
-      // TODO: 两种沙箱同时存在 activeCount 计数有问题，改为统一记录，放在globalEnv里
-      if (++IframeSandbox.activeCount === 1) {
-        patchElementAndDocument()
-        patchHistory()
-        // TODO: 多层嵌套兼容
-      }
+    if (isRouterModeCustom(this.microAppWindow.__MICRO_APP_NAME__)) {
+      this.microAppWindow.__MICRO_APP_BASE_ROUTE__ = this.microAppWindow.__MICRO_APP_BASE_URL__ = baseroute
+    }
+    /* --- memory router part --- end */
+
+    /**
+     * create base element to iframe
+     * WARNING: This will also affect a, image, link and script
+     */
+    if (!disablePatchRequest) {
+      this.createIframeBase()
+    }
+
+    if (++globalEnv.activeSandbox === 1) {
+      patchElementAndDocument()
+      patchHistory()
+    }
+
+    if (++IframeSandbox.activeCount === 1) {
+      // TODO: 多层嵌套兼容
     }
   }
 
@@ -168,52 +214,106 @@ export default class IframeSandbox {
     destroy,
     clearData,
   }: SandBoxStopParams): void {
-    if (this.active) {
-      // clear global event, timeout, data listener
-      this.releaseGlobalEffect(clearData)
+    if (!this.active) return
+    this.recordAndReleaseEffect({ clearData }, !umdMode || destroy)
 
-      if (this.removeHistoryListener) {
-        this.clearRouteState(keepRouteState)
-        // release listener of popstate
-        this.removeHistoryListener()
-      }
+    /* --- memory router part --- start */
+    // if keep-route-state is true, preserve microLocation state
+    this.clearRouteState(keepRouteState)
 
-      if (!umdMode || destroy) {
-        // in default mode, iframe will be deleted when unmount
-        this.iframe.parentNode?.removeChild(this.iframe)
+    // release listener of popstate for child app
+    this.removeHistoryListener?.()
+    /* --- memory router part --- end */
 
-        this.escapeKeys.forEach((key: PropertyKey) => {
-          Reflect.deleteProperty(globalEnv.rawWindow, key)
-        })
-        this.escapeKeys.clear()
-      }
+    if (!umdMode || destroy) {
+      this.deleteIframeElement()
 
-      if (--IframeSandbox.activeCount === 0) {
-        releasePatchElementAndDocument()
-        releasePatchHistory()
-      }
-
-      this.active = false
+      this.escapeKeys.forEach((key: PropertyKey) => {
+        Reflect.deleteProperty(globalEnv.rawWindow, key)
+      })
+      this.escapeKeys.clear()
     }
+
+    if (--globalEnv.activeSandbox === 0) {
+      releasePatchElementAndDocument()
+      releasePatchHistory()
+    }
+
+    if (--IframeSandbox.activeCount === 0) {
+      // TODO: Is there anything to put here?
+    }
+
+    this.active = false
   }
 
   /**
-   * clear global event, timeout, data listener
+   * create static properties
+   * NOTE:
+   *  1. execute as early as possible
+   *  2. run after patchRouter & createProxyWindow
+   * TODO: 设置为只读变量
+   */
+  private initStaticGlobalKeys (
+    appName: string,
+    url: string,
+    microAppWindow: microAppWindowType,
+  ): void {
+    microAppWindow.__MICRO_APP_ENVIRONMENT__ = true
+    microAppWindow.__MICRO_APP_NAME__ = appName
+    microAppWindow.__MICRO_APP_URL__ = url
+    microAppWindow.__MICRO_APP_PUBLIC_PATH__ = getEffectivePath(url)
+    microAppWindow.__MICRO_APP_BASE_ROUTE__ = ''
+    microAppWindow.__MICRO_APP_WINDOW__ = microAppWindow
+    microAppWindow.__MICRO_APP_PRE_RENDER__ = false
+    microAppWindow.__MICRO_APP_UMD_MODE__ = false
+    microAppWindow.__MICRO_APP_PROXY_WINDOW__ = this.proxyWindow
+    microAppWindow.__MICRO_APP_SANDBOX__ = this
+    microAppWindow.__MICRO_APP_SANDBOX_TYPE__ = 'iframe'
+    microAppWindow.rawWindow = globalEnv.rawWindow
+    microAppWindow.rawDocument = globalEnv.rawDocument
+    microAppWindow.microApp = assign(new EventCenterForMicroApp(appName), {
+      removeDomScope,
+      pureCreateElement,
+      location: this.proxyLocation,
+      router,
+    })
+  }
+
+  /**
+   * Record global effect and then release (effect: global event, timeout, data listener)
    * Scenes:
-   * 1. unmount of normal/umd app
+   * 1. unmount of default/umd app
    * 2. hidden keep-alive app
    * 3. after init prerender app
-   * @param clearData clear data from base app
+   * @param options {
+   *  @param clearData clear data from base app
+   *  @param isPrerender is prerender app
+   *  @param keepAlive is keep-alive app
+   * }
+   * @param preventRecord prevent record effect events (default or destroy)
    */
-  public releaseGlobalEffect (clearData = false): void {
-    this.windowEffect.release()
-    this.documentEffect.release()
-    this.microAppWindow.microApp.clearDataListener()
-    this.microAppWindow.microApp.clearGlobalDataListener()
-    if (clearData) {
-      microApp.clearData(this.microAppWindow.__MICRO_APP_NAME__)
-      this.microAppWindow.microApp.clearData()
+  public recordAndReleaseEffect (
+    options: releaseGlobalEffectParams,
+    preventRecord = false,
+  ): void {
+    if (preventRecord) {
+      this.resetEffectSnapshot()
+    } else {
+      this.recordEffectSnapshot()
     }
+    this.releaseGlobalEffect(options)
+  }
+
+  /**
+   * reset effect snapshot data in default mode or destroy
+   * Scenes:
+   *  1. unmount hidden keep-alive app manually
+   *  2. unmount prerender app manually
+   */
+  public resetEffectSnapshot (): void {
+    this.windowEffect?.reset()
+    this.documentEffect?.reset()
+    resetDataCenterSnapshot(this.microAppWindow.microApp)
   }
 
   /**
@@ -224,16 +324,37 @@ export default class IframeSandbox {
    * 3. after init prerender app
    */
   public recordEffectSnapshot (): void {
-    this.windowEffect.record()
-    this.documentEffect.record()
+    this.windowEffect?.record()
+    this.documentEffect?.record()
     recordDataCenterSnapshot(this.microAppWindow.microApp)
   }
 
   // rebuild umd snapshot before remount umd app
   public rebuildEffectSnapshot (): void {
-    this.windowEffect.rebuild()
-    this.documentEffect.rebuild()
+    this.windowEffect?.rebuild()
+    this.documentEffect?.rebuild()
     rebuildDataCenterSnapshot(this.microAppWindow.microApp)
+  }
+
+  /**
+   * clear global event, timeout, data listener
+   * Scenes:
+   * 1. unmount of normal/umd app
+   * 2. hidden keep-alive app
+   * 3. after init prerender app
+   * @param clearData clear data from base app
+   * @param isPrerender is prerender app
+   * @param keepAlive is keep-alive app
+   */
+  public releaseGlobalEffect ({ clearData = false }: releaseGlobalEffectParams): void {
+    this.windowEffect?.release()
+    this.documentEffect?.release()
+    this.microAppWindow.microApp?.clearDataListener()
+    this.microAppWindow.microApp?.clearGlobalDataListener()
+    if (clearData) {
+      microApp.clearData(this.microAppWindow.__MICRO_APP_NAME__)
+      this.microAppWindow.microApp?.clearData()
+    }
   }
 
   // set __MICRO_APP_PRE_RENDER__ state
@@ -241,35 +362,37 @@ export default class IframeSandbox {
     this.microAppWindow.__MICRO_APP_PRE_RENDER__ = state
   }
 
-  private initStaticGlobalKeys (appName: string, url: string): void {
-    this.microAppWindow.__MICRO_APP_ENVIRONMENT__ = true
-    this.microAppWindow.__MICRO_APP_NAME__ = appName
-    this.microAppWindow.__MICRO_APP_URL__ = url
-    this.microAppWindow.__MICRO_APP_PUBLIC_PATH__ = getEffectivePath(url)
-    this.microAppWindow.__MICRO_APP_WINDOW__ = this.microAppWindow
-    this.microAppWindow.__MICRO_APP_PRE_RENDER__ = false
-    this.microAppWindow.__MICRO_APP_SANDBOX__ = this
-    this.microAppWindow.__MICRO_APP_PROXY_WINDOW__ = this.proxyWindow
-    this.microAppWindow.rawWindow = globalEnv.rawWindow
-    this.microAppWindow.rawDocument = globalEnv.rawDocument
-    this.microAppWindow.microApp = assign(new EventCenterForMicroApp(appName), {
-      removeDomScope,
-      pureCreateElement,
-      location: this.proxyLocation,
-      router,
-    })
+  // record umdMode
+  public markUmdMode (state: boolean): void {
+    this.microAppWindow.__MICRO_APP_UMD_MODE__ = state
   }
 
   // TODO: RESTRUCTURE
   private patchIframe (microAppWindow: microAppWindowType, cb: CallableFunction): void {
+    const oldMicroDocument = microAppWindow.document
     this.sandboxReady = new Promise<void>((resolve) => {
       (function iframeLocationReady () {
         setTimeout(() => {
-          if (microAppWindow.location.href === 'about:blank') {
+          try {
+            /**
+             * NOTE:
+             *  1. In browser, iframe document will be recreated after iframe initial
+             *  2. In jest, iframe document is always the same
+             */
+            if (microAppWindow.document === oldMicroDocument && !__TEST__) {
+              iframeLocationReady()
+            } else {
+              /**
+               * NOTE:
+               *  1. microAppWindow will not be recreated
+               *  2. the properties of microAppWindow may be recreated, such as document
+               *  3. the variables added to microAppWindow may be cleared
+               */
+              microAppWindow.stop()
+              cb(resolve)
+            }
+          } catch (e) {
             iframeLocationReady()
-          } else {
-            microAppWindow.stop()
-            cb(resolve)
           }
         }, 0)
       })()
@@ -287,87 +410,22 @@ export default class IframeSandbox {
     // 记录iframe原生body
     this.microBody = microDocument.body
     this.microHead = microDocument.head
-
-    // 创建base
-    this.createIframeBase(microAppWindow)
   }
 
   /**
    * baseElement will complete the relative address of element according to the URL
    * e.g: a image link script fetch ajax EventSource
    */
-  private createIframeBase (microAppWindow: microAppWindowType): void {
-    const microDocument = microAppWindow.document
-    this.baseElement = microDocument.createElement('base')
+  private createIframeBase (): void {
+    this.baseElement = pureCreateElement('base')
     this.updateIframeBase()
-    microDocument.head.appendChild(this.baseElement)
+    this.microHead.appendChild(this.baseElement)
   }
 
-  // TODO: 初始化和每次跳转时都要更新base的href
+  // 初始化和每次跳转时都要更新base的href
   public updateIframeBase = (): void => {
-    this.baseElement?.setAttribute('href', this.proxyLocation.protocol + '//' + this.proxyLocation.host + this.proxyLocation.pathname)
-  }
-
-  private createProxyLocation (
-    appName: string,
-    url: string,
-    microAppWindow: microAppWindowType,
-    childStaticLocation: MicroLocation,
-    browserHost: string,
-    childHost: string,
-  ): void {
-    this.proxyLocation = createMicroLocation(
-      appName,
-      url,
-      microAppWindow,
-      childStaticLocation,
-      browserHost,
-      childHost,
-    )
-  }
-
-  private createProxyWindow (appName: string, microAppWindow: microAppWindowType): void {
-    const rawWindow = globalEnv.rawWindow
-    this.proxyWindow = new Proxy(microAppWindow, {
-      get: (target: microAppWindowType, key: PropertyKey): unknown => {
-        if (key === 'location') {
-          return this.proxyLocation
-        }
-
-        if (globalPropertyList.includes(key.toString())) {
-          return this.proxyWindow
-        }
-
-        return bindFunctionToRawTarget(Reflect.get(target, key), target)
-      },
-      set: (target: microAppWindowType, key: PropertyKey, value: unknown): boolean => {
-        /**
-         * TODO:
-         * 1、location域名相同，子应用内部跳转时的处理
-         * 2、和with沙箱的变量相同，提取成公共数组
-         */
-        if (key === 'location') {
-          return Reflect.set(rawWindow, key, value)
-        }
-
-        Reflect.set(target, key, value)
-
-        if (this.escapeProperties.includes(key)) {
-          !Reflect.has(rawWindow, key) && this.escapeKeys.add(key)
-          Reflect.set(rawWindow, key, value)
-        }
-
-        return true
-      },
-      has: (target: microAppWindowType, key: PropertyKey) => key in target,
-      deleteProperty: (target: microAppWindowType, key: PropertyKey): boolean => {
-        if (Reflect.has(target, key)) {
-          this.escapeKeys.has(key) && Reflect.deleteProperty(rawWindow, key)
-          return Reflect.deleteProperty(target, key)
-        }
-        return true
-      },
-    })
+    // origin must be child app origin
+    this.baseElement?.setAttribute('href', createURL(this.url).origin + this.proxyLocation.pathname)
   }
 
   /**
@@ -419,6 +477,28 @@ export default class IframeSandbox {
   }
 
   public removeRouteInfoForKeepAliveApp (): void {
-    removeStateAndPathFromBrowser(this.microAppWindow.__MICRO_APP_NAME__)
+    removePathFromBrowser(this.microAppWindow.__MICRO_APP_NAME__)
+  }
+
+  /**
+   * Format all html elements when init
+   * @param container micro app container
+   */
+  public patchStaticElement (container: Element | ShadowRoot): void {
+    patchElementTree(container, this.microAppWindow.__MICRO_APP_NAME__)
+  }
+
+  /**
+   * action before exec scripts when mount
+   * Actions:
+   * 1. patch static elements from html
+   * @param container micro app container
+   */
+  public actionBeforeExecScripts (container: Element | ShadowRoot): void {
+    this.patchStaticElement(container)
+  }
+
+  public setStaticAppState (state: string): void {
+    this.microAppWindow.__MICRO_APP_STATE__ = state
   }
 }

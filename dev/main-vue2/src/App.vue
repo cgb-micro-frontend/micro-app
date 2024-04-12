@@ -22,13 +22,21 @@
           <i class="el-icon-setting"></i>
           <span slot="title">vue3</span>
         </el-menu-item>
-        <el-menu-item index="/vite/">
-          <i class="el-icon-setting"></i>
-          <span slot="title">vite</span>
+        <el-menu-item index="/vite2/">
+          <i class="el-icon-position"></i>
+          <span slot="title">vite2</span>
+        </el-menu-item>
+        <el-menu-item index="/vite4/">
+          <i class="el-icon-delete-location"></i>
+          <span slot="title">vite4</span>
         </el-menu-item>
         <el-menu-item index="/angular11/">
           <i class="el-icon-picture-outline"></i>
           <span slot="title">angular11</span>
+        </el-menu-item>
+        <el-menu-item index="/angular14/">
+          <i class="el-icon-brush"></i>
+          <span slot="title">angular14</span>
         </el-menu-item>
         <el-menu-item index="/multiple/">
           <i class="el-icon-s-cooperation"></i>

@@ -1,9 +1,9 @@
 import type {
   microAppWindowType,
   MicroEventListener,
-  CommonIframeEffect,
-  MicroLocation,
+  CommonEffectHook,
 } from '@micro-app/types'
+import type IframeSandbox from './index'
 import {
   rawDefineProperty,
   rawDefineProperties,
@@ -11,12 +11,11 @@ import {
   logWarn,
   isUniqueElement,
   isInvalidQuerySelectorKey,
+  throttleDeferForSetAppName,
 } from '../../libs/utils'
 import globalEnv from '../../libs/global_env'
 import bindFunctionToRawTarget from '../bind_function'
 import {
-  scopeIframeDocumentEvent,
-  scopeIframeDocumentOnEvent,
   uniqueDocumentElement,
   proxy2RawDocOrShadowKeys,
   proxy2RawDocOrShadowMethods,
@@ -24,42 +23,95 @@ import {
   proxy2RawDocumentMethods,
 } from './special_key'
 import {
+  SCOPE_DOCUMENT_EVENT,
+  SCOPE_DOCUMENT_ON_EVENT,
+} from '../../constants'
+import {
   updateElementInfo,
-} from './actions'
-import { appInstanceMap } from '../../create_app'
+} from '../adapter'
+import {
+  appInstanceMap,
+} from '../../create_app'
 
 /**
- * TODO:
- *  1、shadowDOM
- *  2、重构
+ * TODO: 1、shadowDOM 2、结构优化
+ *
+ * patch document of child app
+ * @param appName app name
+ * @param microAppWindow microWindow of child app
+ * @param sandbox IframeSandbox
+ * @returns EffectHook
  */
-export function patchIframeDocument (
+export function patchDocument (
   appName: string,
   microAppWindow: microAppWindowType,
-  proxyLocation: MicroLocation,
-): CommonIframeEffect {
+  sandbox: IframeSandbox,
+): CommonEffectHook {
   patchDocumentPrototype(appName, microAppWindow)
-  patchDocumentProperties(appName, microAppWindow, proxyLocation)
+  patchDocumentProperty(appName, microAppWindow, sandbox)
 
-  return documentEffect(appName, microAppWindow)
+  return patchDocumentEffect(appName, microAppWindow)
 }
 
 function patchDocumentPrototype (appName: string, microAppWindow: microAppWindowType): void {
   const rawDocument = globalEnv.rawDocument
   const microRootDocument = microAppWindow.Document
   const microDocument = microAppWindow.document
+  const rawMicroCreateElement = microRootDocument.prototype.createElement
+  const rawMicroCreateElementNS = microRootDocument.prototype.createElementNS
+  const rawMicroCreateTextNode = microRootDocument.prototype.createTextNode
+  const rawMicroCreateDocumentFragment = microRootDocument.prototype.createDocumentFragment
+  const rawMicroCreateComment = microRootDocument.prototype.createComment
+  const rawMicroQuerySelector = microRootDocument.prototype.querySelector
+  const rawMicroQuerySelectorAll = microRootDocument.prototype.querySelectorAll
+  const rawMicroGetElementById = microRootDocument.prototype.getElementById
+  const rawMicroGetElementsByClassName = microRootDocument.prototype.getElementsByClassName
+  const rawMicroGetElementsByTagName = microRootDocument.prototype.getElementsByTagName
+  const rawMicroGetElementsByName = microRootDocument.prototype.getElementsByName
+  const rawMicroElementFromPoint = microRootDocument.prototype.elementFromPoint
+  const rawMicroCaretRangeFromPoint = microRootDocument.prototype.caretRangeFromPoint
+
+  microRootDocument.prototype.caretRangeFromPoint = function caretRangeFromPoint (
+    x: number,
+    y: number,
+  ): Range {
+    // 这里this指向document才可以获取到子应用的document实例，range才可以被成功生成
+    const element = rawMicroElementFromPoint.call(rawDocument, x, y)
+    const range = rawMicroCaretRangeFromPoint.call(rawDocument, x, y)
+    updateElementInfo(element, appName)
+    return range
+  }
 
   microRootDocument.prototype.createElement = function createElement (
     tagName: string,
     options?: ElementCreationOptions,
   ): HTMLElement {
-    const element = globalEnv.rawCreateElement.call(this, tagName, options)
-    return updateElementInfo(element, microAppWindow, appName)
+    const element = rawMicroCreateElement.call(this, tagName, options)
+    return updateElementInfo(element, appName)
+  }
+
+  microRootDocument.prototype.createElementNS = function createElementNS (
+    namespaceURI: string,
+    name: string,
+    options?: string | ElementCreationOptions,
+  ): HTMLElement {
+    const element = rawMicroCreateElementNS.call(this, namespaceURI, name, options)
+    return updateElementInfo(element, appName)
   }
 
   microRootDocument.prototype.createTextNode = function createTextNode (data: string): Text {
-    const element = globalEnv.rawCreateTextNode.call(this, data)
-    return updateElementInfo<Text>(element, microAppWindow, appName)
+    const element = rawMicroCreateTextNode.call(this, data)
+    return updateElementInfo<Text>(element, appName)
+  }
+
+  microRootDocument.prototype.createDocumentFragment = function createDocumentFragment (): DocumentFragment {
+    const element = rawMicroCreateDocumentFragment.call(this)
+    return updateElementInfo(element, appName)
+  }
+
+  microRootDocument.prototype.createComment = function createComment (data: string): Comment {
+    const element = rawMicroCreateComment.call(this, data)
+    return updateElementInfo<Comment>(element, appName)
   }
 
   function getDefaultRawTarget (target: Document): Document {
@@ -69,11 +121,12 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
   // query element👇
   function querySelector (this: Document, selectors: string): any {
     if (
+      !selectors ||
       isUniqueElement(selectors) ||
       microDocument !== this
     ) {
       const _this = getDefaultRawTarget(this)
-      return globalEnv.rawQuerySelector.call(_this, selectors)
+      return rawMicroQuerySelector.call(_this, selectors)
     }
 
     return appInstanceMap.get(appName)?.querySelector(selectors) ?? null
@@ -81,11 +134,12 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
 
   function querySelectorAll (this: Document, selectors: string): any {
     if (
+      !selectors ||
       isUniqueElement(selectors) ||
       microDocument !== this
     ) {
       const _this = getDefaultRawTarget(this)
-      return globalEnv.rawQuerySelectorAll.call(_this, selectors)
+      return rawMicroQuerySelectorAll.call(_this, selectors)
     }
 
     return appInstanceMap.get(appName)?.querySelectorAll(selectors) ?? []
@@ -97,26 +151,26 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
   microRootDocument.prototype.getElementById = function getElementById (key: string): HTMLElement | null {
     const _this = getDefaultRawTarget(this)
     if (isInvalidQuerySelectorKey(key)) {
-      return globalEnv.rawGetElementById.call(_this, key)
+      return rawMicroGetElementById.call(_this, key)
     }
 
     try {
       return querySelector.call(this, `#${key}`)
     } catch {
-      return globalEnv.rawGetElementById.call(_this, key)
+      return rawMicroGetElementById.call(_this, key)
     }
   }
 
   microRootDocument.prototype.getElementsByClassName = function getElementsByClassName (key: string): HTMLCollectionOf<Element> {
     const _this = getDefaultRawTarget(this)
     if (isInvalidQuerySelectorKey(key)) {
-      return globalEnv.rawGetElementsByClassName.call(_this, key)
+      return rawMicroGetElementsByClassName.call(_this, key)
     }
 
     try {
       return querySelectorAll.call(this, `.${key}`)
     } catch {
-      return globalEnv.rawGetElementsByClassName.call(_this, key)
+      return rawMicroGetElementsByClassName.call(_this, key)
     }
   }
 
@@ -124,37 +178,38 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
     const _this = getDefaultRawTarget(this)
     if (
       isUniqueElement(key) ||
-      isInvalidQuerySelectorKey(key) ||
-      (!appInstanceMap.get(appName)?.inline && /^script$/i.test(key))
+      isInvalidQuerySelectorKey(key)
     ) {
-      return globalEnv.rawGetElementsByTagName.call(_this, key)
+      return rawMicroGetElementsByTagName.call(_this, key)
+    } else if (/^script|base$/i.test(key)) {
+      return rawMicroGetElementsByTagName.call(microDocument, key)
     }
 
     try {
       return querySelectorAll.call(this, key)
     } catch {
-      return globalEnv.rawGetElementsByTagName.call(_this, key)
+      return rawMicroGetElementsByTagName.call(_this, key)
     }
   }
 
   microRootDocument.prototype.getElementsByName = function getElementsByName (key: string): NodeListOf<HTMLElement> {
     const _this = getDefaultRawTarget(this)
     if (isInvalidQuerySelectorKey(key)) {
-      return globalEnv.rawGetElementsByName.call(_this, key)
+      return rawMicroGetElementsByName.call(_this, key)
     }
 
     try {
       return querySelectorAll.call(this, `[name=${key}]`)
     } catch {
-      return globalEnv.rawGetElementsByName.call(_this, key)
+      return rawMicroGetElementsByName.call(_this, key)
     }
   }
 }
 
-function patchDocumentProperties (
+function patchDocumentProperty (
   appName: string,
   microAppWindow: microAppWindowType,
-  proxyLocation: MicroLocation,
+  sandbox: IframeSandbox,
 ): void {
   const rawDocument = globalEnv.rawDocument
   const microRootDocument = microAppWindow.Document
@@ -163,7 +218,6 @@ function patchDocumentProperties (
   const getCommonDescriptor = (key: PropertyKey, getter: () => unknown): PropertyDescriptor => {
     const { enumerable } = Object.getOwnPropertyDescriptor(microRootDocument.prototype, key) || {
       enumerable: true,
-      writable: true,
     }
     return {
       configurable: true,
@@ -174,14 +228,18 @@ function patchDocumentProperties (
 
   const createDescriptors = (): PropertyDescriptorMap => {
     const result: PropertyDescriptorMap = {}
-    const descList: Array<[PropertyKey, () => unknown]> = [
-      ['documentURI', () => proxyLocation.href],
-      ['URL', () => proxyLocation.href],
+    const descList: Array<[string, () => unknown]> = [
+      // if disable-memory-router or router-mode='disable', href point to base app
+      ['documentURI', () => sandbox.proxyLocation.href],
+      ['URL', () => sandbox.proxyLocation.href],
       ['documentElement', () => rawDocument.documentElement],
       ['scrollingElement', () => rawDocument.scrollingElement],
       ['forms', () => microRootDocument.prototype.querySelectorAll.call(microDocument, 'form')],
       ['images', () => microRootDocument.prototype.querySelectorAll.call(microDocument, 'img')],
       ['links', () => microRootDocument.prototype.querySelectorAll.call(microDocument, 'a')],
+      // unique keys of micro-app
+      ['microAppElement', () => appInstanceMap.get(appName)?.container],
+      ['__MICRO_APP_NAME__', () => appName],
     ]
 
     descList.forEach((desc) => {
@@ -216,27 +274,26 @@ function patchDocumentProperties (
     rawDefineProperty(microDocument, tagName, {
       enumerable: true,
       configurable: true,
-      get: () => rawDocument[tagName],
-      set: undefined,
+      get: () => {
+        throttleDeferForSetAppName(appName)
+        return rawDocument[tagName]
+      },
+      set: (value: unknown) => { rawDocument[tagName] = value },
     })
   })
 }
 
-function documentEffect (appName: string, microAppWindow: microAppWindowType): CommonIframeEffect {
-  const documentEventListenerMap = new Map<string, Map<string, Set<MicroEventListener>>>()
-  const sstDocumentListenerMap = new Map<string, Set<MicroEventListener>>()
-  let onClickHandler: unknown
-  let sstOnClickHandler: unknown
+function patchDocumentEffect (appName: string, microAppWindow: microAppWindowType): CommonEffectHook {
+  const { rawDocument, rawAddEventListener, rawRemoveEventListener } = globalEnv
+  const eventListenerMap = new Map<string, Set<MicroEventListener>>()
+  const sstEventListenerMap = new Map<string, Set<MicroEventListener>>()
+  let onClickHandler: unknown = null
+  let sstOnClickHandler: unknown = null
   const microRootDocument = microAppWindow.Document
   const microDocument = microAppWindow.document
-  const {
-    rawDocument,
-    rawAddEventListener,
-    rawRemoveEventListener,
-  } = globalEnv
 
   function getEventTarget (type: string, bindTarget: Document): Document {
-    return scopeIframeDocumentEvent.includes(type) ? bindTarget : rawDocument
+    return SCOPE_DOCUMENT_EVENT.includes(type) ? bindTarget : rawDocument
   }
 
   microRootDocument.prototype.addEventListener = function (
@@ -244,17 +301,12 @@ function documentEffect (appName: string, microAppWindow: microAppWindowType): C
     listener: MicroEventListener,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    const handler = isFunction(listener) ? (listener.__MICRO_APP_BOUND_FUNCTION__ = listener.bind(this)) : listener
-    const appListenersMap = documentEventListenerMap.get(appName)
-    if (appListenersMap) {
-      const appListenerList = appListenersMap.get(type)
-      if (appListenerList) {
-        appListenerList.add(listener)
-      } else {
-        appListenersMap.set(type, new Set([listener]))
-      }
+    const handler = isFunction(listener) ? (listener.__MICRO_APP_BOUND_FUNCTION__ = listener.__MICRO_APP_BOUND_FUNCTION__ || listener.bind(this)) : listener
+    const listenerList = eventListenerMap.get(type)
+    if (listenerList) {
+      listenerList.add(listener)
     } else {
-      documentEventListenerMap.set(appName, new Map([[type, new Set([listener])]]))
+      eventListenerMap.set(type, new Set([listener]))
     }
     listener && (listener.__MICRO_APP_MARK_OPTIONS__ = options)
     rawAddEventListener.call(getEventTarget(type, this), type, handler, options)
@@ -265,12 +317,9 @@ function documentEffect (appName: string, microAppWindow: microAppWindowType): C
     listener: MicroEventListener,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    const appListenersMap = documentEventListenerMap.get(appName)
-    if (appListenersMap) {
-      const appListenerList = appListenersMap.get(type)
-      if (appListenerList?.size && appListenerList.has(listener)) {
-        appListenerList.delete(listener)
-      }
+    const listenerList = eventListenerMap.get(type)
+    if (listenerList?.size && listenerList.has(listener)) {
+      listenerList.delete(listener)
     }
     const handler = listener?.__MICRO_APP_BOUND_FUNCTION__ || listener
     rawRemoveEventListener.call(getEventTarget(type, this), type, handler, options)
@@ -300,7 +349,7 @@ function documentEffect (appName: string, microAppWindow: microAppWindowType): C
    * 2、shadowDOM
    */
   Object.getOwnPropertyNames(microRootDocument.prototype)
-    .filter((key: string) => /^on/.test(key) && !scopeIframeDocumentOnEvent.includes(key))
+    .filter((key: string) => /^on/.test(key) && !SCOPE_DOCUMENT_ON_EVENT.includes(key))
     .forEach((eventName: string) => {
       const { enumerable, writable, set } = Object.getOwnPropertyDescriptor(microRootDocument.prototype, eventName) || {
         enumerable: true,
@@ -322,22 +371,60 @@ function documentEffect (appName: string, microAppWindow: microAppWindowType): C
       }
     })
 
-  const clearSnapshotData = () => {
-    sstDocumentListenerMap.clear()
+  const reset = (): void => {
+    sstEventListenerMap.clear()
     sstOnClickHandler = null
   }
 
+  /**
+   * record event
+   * NOTE:
+   *  1.record maybe call twice when unmount prerender, keep-alive app manually with umd mode
+   * Scenes:
+   *  1. exec umdMountHook in umd mode
+   *  2. hidden keep-alive app
+   *  3. after init prerender app
+   */
+  const record = (): void => {
+    /**
+     * record onclick handler
+     * onClickHandler maybe set again after prerender/keep-alive app hidden
+     */
+    sstOnClickHandler = onClickHandler || sstOnClickHandler
+
+    // record document event
+    eventListenerMap.forEach((listenerList, type) => {
+      if (listenerList.size) {
+        const cacheList = sstEventListenerMap.get(type) || []
+        sstEventListenerMap.set(type, new Set([...cacheList, ...listenerList]))
+      }
+    })
+  }
+
+  // rebuild event and timer before remount app
+  const rebuild = (): void => {
+    // rebuild onclick event
+    if (sstOnClickHandler && !onClickHandler) microDocument.onclick = sstOnClickHandler
+
+    sstEventListenerMap.forEach((listenerList, type) => {
+      for (const listener of listenerList) {
+        microDocument.addEventListener(type, listener, listener?.__MICRO_APP_MARK_OPTIONS__)
+      }
+    })
+
+    reset()
+  }
+
   const release = (): void => {
-    // Clear the function bound by micro application through document.onclick
+    // Clear the function bound by micro app through document.onclick
     if (isFunction(onClickHandler)) {
       rawRemoveEventListener.call(rawDocument, 'click', onClickHandler)
-      onClickHandler = null
     }
+    onClickHandler = null
 
     // Clear document binding event
-    const documentAppListenersMap = documentEventListenerMap.get(appName)
-    if (documentAppListenersMap) {
-      documentAppListenersMap.forEach((listenerList, type) => {
+    if (eventListenerMap.size) {
+      eventListenerMap.forEach((listenerList, type) => {
         for (const listener of listenerList) {
           rawRemoveEventListener.call(
             getEventTarget(type, microDocument),
@@ -346,47 +433,12 @@ function documentEffect (appName: string, microAppWindow: microAppWindowType): C
           )
         }
       })
-      documentAppListenersMap.clear()
+      eventListenerMap.clear()
     }
-  }
-
-  /**
-   * record event
-   * Scenes:
-   * 1. exec umdMountHook in umd mode
-   * 2. hidden keep-alive app
-   * 3. after init prerender app
-   */
-  const record = (): void => {
-    // record onclick handler
-    sstOnClickHandler = onClickHandler
-
-    // record document event
-    const documentAppListenersMap = documentEventListenerMap.get(appName)
-    if (documentAppListenersMap) {
-      documentAppListenersMap.forEach((listenerList, type) => {
-        if (listenerList.size) {
-          sstDocumentListenerMap.set(type, new Set(listenerList))
-        }
-      })
-    }
-  }
-
-  // rebuild event and timer before remount app
-  const rebuild = (): void => {
-    // rebuild onclick event
-    if (sstOnClickHandler) microDocument.onclick = sstOnClickHandler
-
-    sstDocumentListenerMap.forEach((listenerList, type) => {
-      for (const listener of listenerList) {
-        document.addEventListener(type, listener, listener?.__MICRO_APP_MARK_OPTIONS__)
-      }
-    })
-
-    clearSnapshotData()
   }
 
   return {
+    reset,
     record,
     rebuild,
     release,

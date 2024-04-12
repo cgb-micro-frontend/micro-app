@@ -6,18 +6,15 @@ import type {
 } from '@micro-app/types'
 import {
   appInstanceMap,
+  isIframeSandbox,
 } from '../../create_app'
 import {
   getActiveApps,
 } from '../../micro_app'
 import {
-  formatEventName,
-} from '../with/effect'
-import {
   getMicroPathFromURL,
   getMicroState,
   isEffectiveApp,
-  isIframeSandbox,
 } from './core'
 import {
   updateMicroLocation,
@@ -50,28 +47,7 @@ export function addHistoryListener (appName: string): CallableFunction {
       }).includes(appName) &&
       !e.onlyForBrowser
     ) {
-      const microPath = getMicroPathFromURL(appName)
-      const app = appInstanceMap.get(appName)!
-      const proxyWindow = app.sandBox!.proxyWindow
-      const microAppWindow = app.sandBox!.microAppWindow
-      let isHashChange = false
-      // for hashChangeEvent
-      const oldHref = proxyWindow.location.href
-      // Do not attach micro state to url when microPath is empty
-      if (microPath) {
-        const oldHash = proxyWindow.location.hash
-        updateMicroLocation(appName, microPath, microAppWindow.location as MicroLocation)
-        isHashChange = proxyWindow.location.hash !== oldHash
-      }
-
-      // dispatch formatted popStateEvent to child
-      dispatchPopStateEventToMicroApp(appName, proxyWindow, microAppWindow)
-
-      // dispatch formatted hashChangeEvent to child when hash change
-      if (isHashChange) dispatchHashChangeEventToMicroApp(appName, proxyWindow, microAppWindow, oldHref)
-
-      // clear element scope before trigger event of next app
-      removeDomScope()
+      updateMicroLocationWithEvent(appName, getMicroPathFromURL(appName))
     }
   }
 
@@ -80,6 +56,41 @@ export function addHistoryListener (appName: string): CallableFunction {
   return () => {
     rawWindow.removeEventListener('popstate', popStateHandler)
   }
+}
+
+/**
+ * Effect: use to trigger child app jump
+ * Actions:
+ *  1. update microLocation with target path
+ *  2. dispatch popStateEvent & hashChangeEvent
+ * @param appName app name
+ * @param targetFullPath target path of child app
+ */
+export function updateMicroLocationWithEvent (
+  appName: string,
+  targetFullPath: string | null,
+): void {
+  const app = appInstanceMap.get(appName)!
+  const proxyWindow = app.sandBox!.proxyWindow
+  const microAppWindow = app.sandBox!.microAppWindow
+  let isHashChange = false
+  // for hashChangeEvent
+  const oldHref = proxyWindow.location.href
+  // Do not attach micro state to url when targetFullPath is empty
+  if (targetFullPath) {
+    const oldHash = proxyWindow.location.hash
+    updateMicroLocation(appName, targetFullPath, microAppWindow.location as MicroLocation)
+    isHashChange = proxyWindow.location.hash !== oldHash
+  }
+
+  // dispatch formatted popStateEvent to child
+  dispatchPopStateEventToMicroApp(appName, proxyWindow, microAppWindow)
+
+  // dispatch formatted hashChangeEvent to child when hash change
+  if (isHashChange) dispatchHashChangeEventToMicroApp(appName, proxyWindow, microAppWindow, oldHref)
+
+  // clear element scope before trigger event of next app
+  removeDomScope()
 }
 
 /**
@@ -97,27 +108,29 @@ export function dispatchPopStateEventToMicroApp (
    * TODO: test
    * angular14 takes e.type as type judgment
    * when e.type is popstate-appName popstate event will be invalid
+   * Object.defineProperty(newPopStateEvent, 'type', {
+   *    value: 'popstate',
+   *    writable: true,
+   *    configurable: true,
+   *    enumerable: true,
+   * })
    */
-  // Object.defineProperty(newPopStateEvent, 'type', {
-  //   value: 'popstate',
-  //   writable: true,
-  //   configurable: true,
-  //   enumerable: true,
-  // })
-  // create PopStateEvent named popstate-appName with sub app state
+  /**
+   * create PopStateEvent named popstate-appName with sub app state
+   * TODO: feeling like there's something wrong, check carefully
+   *  In native mode, getMicroState(appName) return rawWindow.history.state when use microApp.router.push/replace or other scenes when state.__MICRO_APP_STATE__[appName] is null
+   */
   const newPopStateEvent = new PopStateEvent(
-    isIframeSandbox(appName) ? 'popstate' : formatEventName('popstate', appName),
+    'popstate',
     { state: getMicroState(appName) }
   )
 
-  if (isIframeSandbox(appName)) {
-    microAppWindow.dispatchEvent(newPopStateEvent)
-  } else {
-    globalEnv.rawWindow.dispatchEvent(newPopStateEvent)
-  }
+  microAppWindow.dispatchEvent(newPopStateEvent)
 
-  // call function window.onpopstate if it exists
-  isFunction(proxyWindow.onpopstate) && proxyWindow.onpopstate(newPopStateEvent)
+  if (!isIframeSandbox(appName)) {
+    // call function window.onpopstate if it exists
+    isFunction(proxyWindow.onpopstate) && proxyWindow.onpopstate(newPopStateEvent)
+  }
 }
 
 /**
@@ -133,20 +146,19 @@ export function dispatchHashChangeEventToMicroApp (
   oldHref: string,
 ): void {
   const newHashChangeEvent = new HashChangeEvent(
-    isIframeSandbox(appName) ? 'hashchange' : formatEventName('hashchange', appName),
+    'hashchange',
     {
       newURL: proxyWindow.location.href,
       oldURL: oldHref,
     }
   )
-  if (isIframeSandbox(appName)) {
-    microAppWindow.dispatchEvent(newHashChangeEvent)
-  } else {
-    globalEnv.rawWindow.dispatchEvent(newHashChangeEvent)
-  }
 
-  // call function window.onhashchange if it exists
-  isFunction(proxyWindow.onhashchange) && proxyWindow.onhashchange(newHashChangeEvent)
+  microAppWindow.dispatchEvent(newHashChangeEvent)
+
+  if (!isIframeSandbox(appName)) {
+    // call function window.onhashchange if it exists
+    isFunction(proxyWindow.onhashchange) && proxyWindow.onhashchange(newHashChangeEvent)
+  }
 }
 
 /**

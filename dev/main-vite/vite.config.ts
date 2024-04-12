@@ -1,10 +1,14 @@
-import {defineConfig} from 'vite'
-import vue from '@vitejs/plugin-vue'
 import {resolve} from 'path'
+import { fileURLToPath, URL } from 'node:url'
+
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+  ],
   server: {
     port: 5000,
     fs: {
@@ -12,15 +16,10 @@ export default defineConfig({
     },
     open: true,
   },
-  css: {
-
-  },
   resolve: {
-    alias: [
-      {
-        find: '@micro-zoe/micro-app',
-        replacement: resolve(__dirname, '../../lib/index.esm.js')
-      },
-    ]
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@micro-zoe/micro-app': resolve(__dirname, '../../lib/index.esm.js')
+    }
   }
 })

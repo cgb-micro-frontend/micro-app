@@ -1,6 +1,20 @@
-import type { prefetchParamList, prefetchParam, globalAssetsType } from '@micro-app/types'
-import type { SourceCenter as SourceCenterType } from './source/source_center'
-import CreateApp, { appInstanceMap } from './create_app'
+import type {
+  prefetchParamList,
+  prefetchParam,
+  globalAssetsType,
+  OnLoadParam,
+} from '@micro-app/types'
+import type {
+  SourceCenter as SourceCenterType,
+} from './source/source_center'
+import microApp from './micro_app'
+import sourceCenter from './source/source_center'
+import {
+  PREFETCH_LEVEL,
+} from './constants'
+import CreateApp, {
+  appInstanceMap,
+} from './create_app'
 import {
   requestIdleCallback,
   formatAppURL,
@@ -14,18 +28,21 @@ import {
   isFunction,
   promiseRequestIdle,
   isNumber,
+  assign,
 } from './libs/utils'
-import { fetchSource } from './source/fetch'
-import sourceCenter from './source/source_center'
-import microApp from './micro_app'
-import { PREFETCH_LEVEL } from './constants'
+import {
+  fetchSource,
+} from './source/fetch'
+import {
+  initRouterMode,
+} from './sandbox/router'
 
 /**
  * preFetch([
  *  {
  *    name: string,
  *    url: string,
- *    esmodule: boolean,
+ *    iframe: boolean,
  *    inline: boolean,
  *    'disable-scopecss': boolean,
  *    'disable-sandbox': boolean,
@@ -96,16 +113,28 @@ function preFetchAction (options: prefetchParam): Promise<void> {
           scopecss: !(options['disable-scopecss'] ?? options.disableScopecss ?? microApp.options['disable-scopecss']),
           useSandbox: !(options['disable-sandbox'] ?? options.disableSandbox ?? microApp.options['disable-sandbox']),
           inline: options.inline ?? microApp.options.inline,
-          esmodule: options.esmodule ?? microApp.options.esmodule,
           iframe: options.iframe ?? microApp.options.iframe,
           prefetchLevel: options.level && PREFETCH_LEVEL.includes(options.level) ? options.level : microApp.options.prefetchLevel && PREFETCH_LEVEL.includes(microApp.options.prefetchLevel) ? microApp.options.prefetchLevel : 2,
         })
 
         const oldOnload = app.onLoad
         const oldOnLoadError = app.onLoadError
-        app.onLoad = (html: HTMLElement): void => {
+        app.onLoad = (onLoadParam: OnLoadParam): void => {
+          if (app.isPrerender) {
+            assign(onLoadParam, {
+              defaultPage: options['default-page'],
+              /**
+               * TODO: 预渲染支持disable-memory-router，默认渲染首页即可，文档中也要保留
+               * 问题：
+               *  1、如何确保子应用进行跳转时不影响到浏览器地址？？pure？？
+               */
+              routerMode: initRouterMode(options['router-mode']),
+              baseroute: options.baseroute,
+              disablePatchRequest: options['disable-patch-request'],
+            })
+          }
           resolve()
-          oldOnload.call(app, html, options['default-page'], options['disable-patch-request'])
+          oldOnload.call(app, onLoadParam)
         }
 
         app.onLoadError = (...rests): void => {

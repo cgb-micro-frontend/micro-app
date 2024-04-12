@@ -14,6 +14,7 @@
         :data='data'
         :name='name'
         :url='url'
+        router-mode="state"
         @created='created'
         @beforemount='beforemount'
         @mounted='mounted'

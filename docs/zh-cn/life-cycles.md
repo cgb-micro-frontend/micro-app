@@ -136,16 +136,40 @@ microApp.start({
 })
 ```
 
-## 子应用卸载
-对于子应用只有两个生命周期，挂载和卸载。
+## 全局事件
+在子应用的加载过程中，micro-app会向子应用发送一系列事件，包括渲染、卸载等事件。
 
-**挂载**：子应用的js被执行则为挂载，所以不需要特殊的监听，一般在入口js文件中进行挂载相关操作。
-
-**卸载**：子应用被卸载时会接受到一个名为`unmount`的事件，开发者可以在此进行卸载相关操作。
+#### 渲染事件
+通过向window注册onmount函数，可以监听子应用的渲染事件。
 
 ```js
-// 子应用卸载
+/**
+ * 应用渲染时执行
+ * @param data 初始化数据
+ */
+window.onmount = (data) => {
+  console.log('子应用已经渲染', data)
+}
+```
+
+#### 卸载事件
+通过向window注册onunmount函数，可以监听子应用的卸载事件。
+
+```js
+/**
+ * 应用卸载时执行
+ */
+window.onunmount = () => {
+  // 执行卸载相关操作
+  console.log('子应用已经卸载')
+}
+```
+
+还可以通过window.addEventListener监听子应用的卸载事件unmount。
+```js
 window.addEventListener('unmount', function () {
   // 执行卸载相关操作
+  console.log('子应用已经卸载')
 })
 ```
+

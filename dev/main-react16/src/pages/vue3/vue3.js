@@ -27,7 +27,9 @@ function Vue3 () {
   return (
     <div>
       <Col span={7} className='btn-con'>
-        <Button type="primary" onClick={changeData.bind(this, {type: '新数据' + new Date()})}>向子应用发送数据</Button>
+        <Button type="primary" onClick={changeData.bind(this, {type: '新数据' + new Date()})}>
+          向子应用发送数据
+        </Button>
         <Button type="primary" onClick={jumpToHome}>控制子应用跳转home</Button>
         <Button type="primary" onClick={jumpToElementPlus}>控制子应用跳转element-plus</Button>
         <Button type="primary" onClick={jumpToAntDesignVue}>控制子应用跳转ant-design-vue</Button>
@@ -41,14 +43,16 @@ function Vue3 () {
         data={data}
         onMounted={() => hideLoading(false)}
         onBeforeshow={() => hideLoading(false)}
-        // baseRoute='/micro-app/demo/vue3'
+        baseRoute='/micro-app/demo/vue3'
         // disableScopecss
-        keep-alive
+        // keep-alive
         keep-router-state
+        router-mode='state'
         // inline
         // destroy
         // disableSandbox
         // shadowDOM
+        // iframe
       >
       </micro-app>
     </div>

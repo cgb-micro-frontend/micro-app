@@ -9,6 +9,7 @@ import type {
   AccurateGuard,
   SetDefaultPageOptions,
   AttachAllToURLParam,
+  AppInterface,
 } from '@micro-app/types'
 import {
   encodeMicroPath,
@@ -17,6 +18,9 @@ import {
   setMicroState,
   getMicroState,
   getMicroPathFromURL,
+  isRouterModeSearch,
+  isRouterModePure,
+  isRouterModeState,
 } from './core'
 import {
   logError,
@@ -38,6 +42,7 @@ import { getActiveApps } from '../../micro_app'
 import globalEnv from '../../libs/global_env'
 import { navigateWithNativeEvent, attachRouteToBrowserURL } from './history'
 import bindFunctionToRawTarget from '../bind_function'
+import { updateMicroLocationWithEvent } from './event'
 
 export interface RouterApi {
   router: Router,
@@ -81,11 +86,44 @@ function createRouterApi (): RouterApi {
       setMicroState(
         appName,
         state ?? null,
+        targetLocation,
       ),
     )
     // clear element scope after navigate
     removeDomScope()
   }
+
+  /**
+   * navigation handler
+   * @param appName app.name
+   * @param app app instance
+   * @param to router target options
+   * @param replace use router.replace?
+   */
+  function handleNavigate (
+    appName: string,
+    app: AppInterface,
+    to: RouterTarget,
+    replace: boolean,
+  ): void {
+    const microLocation = app.sandBox!.proxyWindow.location as MicroLocation
+    const targetLocation = createURL(to.path, microLocation.href)
+    // Only get path data, even if the origin is different from microApp
+    const currentFullPath = microLocation.pathname + microLocation.search + microLocation.hash
+    const targetFullPath = targetLocation.pathname + targetLocation.search + targetLocation.hash
+    if (currentFullPath !== targetFullPath || getMicroPathFromURL(appName) !== targetFullPath) {
+      // pure mode will not call history.pushState/replaceState
+      if (!isRouterModePure(appName)) {
+        const methodName = (replace && to.replace !== false) || to.replace === true ? 'replaceState' : 'pushState'
+        navigateWithRawHistory(appName, methodName, targetLocation, to.state)
+      }
+      // only search mode will dispatch PopStateEvent to browser
+      if (!isRouterModeSearch(appName)) {
+        updateMicroLocationWithEvent(appName, targetFullPath)
+      }
+    }
+  }
+
   /**
    * create method of router.push/replace
    * NOTE:
@@ -95,44 +133,44 @@ function createRouterApi (): RouterApi {
    * @param replace use router.replace?
    */
   function createNavigationMethod (replace: boolean): navigationMethod {
-    return function (to: RouterTarget): void {
-      const appName = formatAppName(to.name)
-      if (appName && isString(to.path)) {
-        const app = appInstanceMap.get(appName)
-        if (app && (!app.sandBox || !app.useMemoryRouter)) {
-          return logError(`navigation failed, memory router of app ${appName} is closed`)
-        }
-        // active apps, include hidden keep-alive app
-        if (getActiveApps({ excludePreRender: true }).includes(appName)) {
-          const microLocation = app!.sandBox!.proxyWindow.location as MicroLocation
-          const targetLocation = createURL(to.path, microLocation.href)
-          // Only get path data, even if the origin is different from microApp
-          const currentFullPath = microLocation.pathname + microLocation.search + microLocation.hash
-          const targetFullPath = targetLocation.pathname + targetLocation.search + targetLocation.hash
-          if (currentFullPath !== targetFullPath || getMicroPathFromURL(appName) !== targetFullPath) {
-            const methodName = (replace && to.replace !== false) || to.replace === true ? 'replaceState' : 'pushState'
-            navigateWithRawHistory(appName, methodName, targetLocation, to.state)
-          }
-        } else {
+    return function (to: RouterTarget): Promise<void> {
+      return new Promise((resolve, reject) => {
+        const appName = formatAppName(to.name)
+        if (appName && isString(to.path)) {
           /**
-           * app not exit or unmounted, update browser URL with replaceState
-           * use base app location.origin as baseURL
+           * active apps, exclude prerender app or hidden keep-alive app
+           * NOTE:
+           *  1. prerender app or hidden keep-alive app clear and record popstate event, so we cannot control app jump through the API
+           *  2. disable memory-router
            */
-          const rawLocation = globalEnv.rawWindow.location
-          const targetLocation = createURL(to.path, rawLocation.origin)
-          const targetFullPath = targetLocation.pathname + targetLocation.search + targetLocation.hash
-          if (getMicroPathFromURL(appName) !== targetFullPath) {
-            navigateWithRawHistory(
-              appName,
-              to.replace === false ? 'pushState' : 'replaceState',
-              targetLocation,
-              to.state,
-            )
+          /**
+           * TODO:
+           *  1、子应用开始渲染但是还没渲染完成，调用跳转改如何处理
+           *  2、iframe的沙箱还没初始化时执行跳转报错，如何处理。。。
+           *  3、hidden app、预渲染 app 是否支持跳转 --- 支持（这里还涉及子应用内部跳转的支持）
+           */
+          if (getActiveApps({ excludeHiddenApp: true, excludePreRender: true }).includes(appName)) {
+            const app = appInstanceMap.get(appName)!
+            resolve(app.sandBox.sandboxReady.then(() => handleNavigate(appName, app, to, replace)))
+          } else {
+            reject(logError('导航失败，请确保子应用渲染后再调用此方法'))
           }
+
+          // const rawLocation = globalEnv.rawWindow.location
+          // const targetLocation = createURL(to.path, rawLocation.origin)
+          // const targetFullPath = targetLocation.pathname + targetLocation.search + targetLocation.hash
+          // if (getMicroPathFromURL(appName) !== targetFullPath) {
+          //   navigateWithRawHistory(
+          //     appName,
+          //     to.replace === false ? 'pushState' : 'replaceState',
+          //     targetLocation,
+          //     to.state,
+          //   )
+          // }
+        } else {
+          reject(logError(`navigation failed, name & path are required when use router.${replace ? 'replace' : 'push'}`))
         }
-      } else {
-        logError(`navigation failed, name & path are required when use router.${replace ? 'replace' : 'push'}`)
-      }
+      })
     }
   }
 
@@ -200,16 +238,17 @@ function createRouterApi (): RouterApi {
 
   /**
    * NOTE:
-   * 1. sandbox not open
-   * 2. useMemoryRouter is false
+   * 1. app not exits
+   * 2. sandbox is disabled
+   * 3. router mode is custom
    */
   function commonHandlerForAttachToURL (appName: string): void {
-    const app = appInstanceMap.get(appName)!
-    if (app.sandBox && app.useMemoryRouter) {
+    if (isRouterModeSearch(appName) || isRouterModeState(appName)) {
+      const app = appInstanceMap.get(appName)!
       attachRouteToBrowserURL(
         appName,
         setMicroPathToURL(appName, app.sandBox.proxyWindow.location as MicroLocation),
-        setMicroState(appName, getMicroState(appName)),
+        setMicroState(appName, getMicroState(appName), app.sandBox.proxyWindow.location as MicroLocation),
       )
     }
   }

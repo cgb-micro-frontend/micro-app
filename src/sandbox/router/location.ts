@@ -1,13 +1,44 @@
 /* eslint-disable no-void */
-import type { MicroLocation, GuardLocation, microAppWindowType } from '@micro-app/types'
+import type {
+  MicroLocation,
+  GuardLocation,
+  microAppWindowType,
+} from '@micro-app/types'
 import globalEnv from '../../libs/global_env'
-import { assign as oAssign, createURL, rawDefineProperty } from '../../libs/utils'
-import { setMicroPathToURL, isEffectiveApp, isIframeSandbox, getMicroState } from './core'
-import { dispatchNativeEvent } from './event'
-import { executeNavigationGuard } from './api'
-import { nativeHistoryNavigate, navigateWithNativeEvent } from './history'
-import { appInstanceMap } from '../../create_app'
-import { hijackMicroLocationKeys } from '../iframe/special_key'
+import bindFunctionToRawTarget from '../bind_function'
+import {
+  assign as oAssign,
+  createURL,
+  rawDefineProperty,
+} from '../../libs/utils'
+import {
+  setMicroPathToURL,
+  isEffectiveApp,
+  setMicroState,
+  getMicroState,
+  isRouterModeCustom,
+  isRouterModeNative,
+  isRouterModeSearch,
+  isRouterModeState,
+} from './core'
+import {
+  dispatchNativeEvent,
+  updateMicroLocationWithEvent,
+} from './event'
+import {
+  executeNavigationGuard,
+} from './api'
+import {
+  nativeHistoryNavigate,
+  navigateWithNativeEvent,
+} from './history'
+import {
+  appInstanceMap,
+  isIframeSandbox,
+} from '../../create_app'
+import {
+  HIJACK_LOCATION_KEYS,
+} from '../../constants'
 
 // origin is readonly, so we ignore when updateMicroLocation
 const locationKeys: ReadonlyArray<keyof MicroLocation> = ['href', 'pathname', 'search', 'hash', 'host', 'hostname', 'port', 'protocol', 'search']
@@ -61,37 +92,61 @@ export function createMicroLocation (
     // Even if the origin is the same, developers still have the possibility of want to jump to a new page
     if (targetLocation.origin === proxyLocation.origin) {
       const setMicroPathResult = setMicroPathToURL(appName, targetLocation)
-      /**
-       * change hash with location.href will not trigger the browser reload
-       * so we use pushState & reload to imitate href behavior
-       * NOTE:
-       *    1. if child app only change hash, it should not trigger browser reload
-       *    2. if address is same and has hash, it should not add route stack
-       */
-      if (
-        targetLocation.pathname === proxyLocation.pathname &&
-        targetLocation.search === proxyLocation.search
-      ) {
-        let oldHref = null
-        if (targetLocation.hash !== proxyLocation.hash) {
-          if (setMicroPathResult.isAttach2Hash) oldHref = rawLocation.href
-          nativeHistoryNavigate(appName, methodName, setMicroPathResult.fullPath)
+      // if disable memory-router, navigate directly through rawLocation
+      if (!isRouterModeNative(appName)) {
+        /**
+         * change hash with location.href will not trigger the browser reload
+         * so we use pushState & reload to imitate href behavior
+         * NOTE:
+         *    1. if child app only change hash, it will not reload browser
+         *    2. if address is same and has hash, it will not add route stack
+         */
+        if (
+          targetLocation.pathname === proxyLocation.pathname &&
+          targetLocation.search === proxyLocation.search
+        ) {
+          let oldHref = null
+          if (targetLocation.hash !== proxyLocation.hash) {
+            // search mode only
+            if (setMicroPathResult.isAttach2Hash) {
+              oldHref = rawLocation.href
+            }
+            nativeHistoryNavigate(
+              appName,
+              methodName,
+              setMicroPathResult.fullPath,
+              isRouterModeState(appName) ? setMicroState(appName, null, targetLocation) : null,
+            )
+          }
+
+          if (targetLocation.hash) {
+            if (isRouterModeSearch(appName)) {
+              dispatchNativeEvent(appName, false, oldHref)
+            } else {
+              updateMicroLocationWithEvent(appName, targetLocation.pathname + targetLocation.search + targetLocation.hash)
+            }
+          } else {
+            reload()
+          }
+          return void 0
         }
 
-        if (targetLocation.hash) {
-          dispatchNativeEvent(appName, false, oldHref)
-        } else {
+        /**
+         * simulate behavior of browser (reload) manually
+         * NOTE:
+         *  1. when baseApp is hash router, address change of child will not reload browser(search mode only)
+         *  2. address change in state mode will simulate behavior of browser
+         */
+        if (isRouterModeState(appName) || setMicroPathResult.isAttach2Hash) {
+          nativeHistoryNavigate(
+            appName,
+            methodName,
+            setMicroPathResult.fullPath,
+            isRouterModeState(appName) ? setMicroState(appName, null, targetLocation) : null,
+          )
           reload()
+          return void 0
         }
-        return void 0
-      /**
-       * when baseApp is hash router, address change of child can not reload browser
-       * so we imitate behavior of browser (reload) manually
-       */
-      } else if (setMicroPathResult.isAttach2Hash) {
-        nativeHistoryNavigate(appName, methodName, setMicroPathResult.fullPath)
-        reload()
-        return void 0
       }
 
       return setMicroPathResult.fullPath
@@ -155,65 +210,93 @@ export function createMicroLocation (
   const proxyLocation = new Proxy({} as Location, {
     get: (_: Location, key: string): unknown => {
       const target = getTarget()
-      if (isIframe) {
-        // host hostname port protocol
-        if (hijackMicroLocationKeys.includes(key)) {
-          return childStaticLocation![key]
-        }
-
-        if (key === 'href') {
-          // do not use target, because target may be deleted
-          return target[key].replace(browserHost!, childHost!)
-        }
-      }
 
       if (key === 'assign') return assign
       if (key === 'replace') return replace
       if (key === 'reload') return reload
       if (key === 'self') return target
+      if (key === 'fullPath') return target.fullPath
 
-      return Reflect.get(target, key)
+      /**
+       * Special keys: host, hostname, port, protocol, origin, href
+       * NOTE:
+       *  1. In native mode this keys point to browser, in other mode this keys point to child app origin
+       *  2. In iframe sandbox, iframe.src is base app address, so origin points to the browser by default, we need to replace it with child app origin
+       *  3. In other modes, origin points to child app
+       */
+      if (HIJACK_LOCATION_KEYS.includes(key)) {
+        if (isRouterModeNative(appName)) {
+          return rawLocation[key]
+        }
+        if (isIframe) {
+          return childStaticLocation![key]
+        }
+      }
+
+      if (key === 'href') {
+        if (isRouterModeNative(appName)) {
+          return target[key].replace(target.origin, rawLocation.origin)
+        }
+        if (isIframe) {
+          // target may be deleted
+          return target[key].replace(browserHost!, childHost!)
+        }
+      }
+
+      return bindFunctionToRawTarget<Location>(Reflect.get(target, key), target, 'LOCATION')
     },
     set: (_: Location, key: string, value: string): boolean => {
       if (isEffectiveApp(appName)) {
         const target = getTarget()
         if (key === 'href') {
-          const targetPath = commonHandler(value, 'pushState')
           /**
            * In vite, targetPath without origin will be completed with child origin
            * So we use browser origin to complete targetPath to avoid this problem
-           * But, why child app can affect browser jump?
-           * Guess(need check):
-           *  1. vite records the origin when init
-           *  2. listen for browser jump and automatically complete the address
+           * NOTE:
+           *  1. history mode & value is childOrigin + path ==> jump to browserOrigin + path
+           *  2. disable mode & value is childOrigin + path ==> jump to childOrigin + path
+           *  3. search mode & value is browserOrigin + path ==> jump to browserOrigin + path
            */
+          const targetPath = commonHandler(value, 'pushState')
           if (targetPath) {
             rawLocation.href = createURL(targetPath, rawLocation.origin).href
           }
         } else if (key === 'pathname') {
-          const targetPath = ('/' + value).replace(/^\/+/, '/') + proxyLocation.search + proxyLocation.hash
-          handleForPathNameAndSearch(targetPath, 'pathname')
+          if (isRouterModeCustom(appName)) {
+            rawLocation.pathname = value
+          } else {
+            const targetPath = ('/' + value).replace(/^\/+/, '/') + proxyLocation.search + proxyLocation.hash
+            handleForPathNameAndSearch(targetPath, 'pathname')
+          }
         } else if (key === 'search') {
-          const targetPath = proxyLocation.pathname + ('?' + value).replace(/^\?+/, '?') + proxyLocation.hash
-          handleForPathNameAndSearch(targetPath, 'search')
+          if (isRouterModeCustom(appName)) {
+            rawLocation.search = value
+          } else {
+            const targetPath = proxyLocation.pathname + ('?' + value).replace(/^\?+/, '?') + proxyLocation.hash
+            handleForPathNameAndSearch(targetPath, 'search')
+          }
         } else if (key === 'hash') {
-          const targetPath = proxyLocation.pathname + proxyLocation.search + ('#' + value).replace(/^#+/, '#')
-          const targetLocation = createURL(targetPath, url)
-          // The same hash will not trigger popStateEvent
-          if (targetLocation.hash !== proxyLocation.hash) {
-            navigateWithNativeEvent(
-              appName,
-              'pushState',
-              setMicroPathToURL(appName, targetLocation),
-              false,
-            )
+          if (isRouterModeCustom(appName)) {
+            rawLocation.hash = value
+          } else {
+            const targetPath = proxyLocation.pathname + proxyLocation.search + ('#' + value).replace(/^#+/, '#')
+            const targetLocation = createURL(targetPath, url)
+            // The same hash will not trigger popStateEvent
+            if (targetLocation.hash !== proxyLocation.hash) {
+              navigateWithNativeEvent(
+                appName,
+                'pushState',
+                setMicroPathToURL(appName, targetLocation),
+                false,
+              )
+            }
           }
         } else {
           Reflect.set(target, key, value)
         }
       }
       return true
-    }
+    },
   })
 
   return proxyLocation as MicroLocation
@@ -257,14 +340,17 @@ export function updateMicroLocation (
 ): void {
   // record old values of microLocation to `from`
   const from = createGuardLocation(appName, microLocation)
+  // if is iframeSandbox, microLocation muse be rawLocation of iframe, not proxyLocation
   const newLocation = createURL(path, microLocation.href)
   if (isIframeSandbox(appName)) {
     const microAppWindow = appInstanceMap.get(appName)!.sandBox.microAppWindow
     microAppWindow.rawReplaceState?.call(microAppWindow.history, getMicroState(appName), '', newLocation.href)
   } else {
-    for (const key of locationKeys) {
-      microLocation.self[key] = newLocation[key]
+    let targetHref = newLocation.href
+    if (microLocation.self.origin !== newLocation.origin) {
+      targetHref = targetHref.replace(newLocation.origin, microLocation.self.origin)
     }
+    microLocation.self.href = targetHref
   }
   // update latest values of microLocation to `to`
   const to = createGuardLocation(appName, microLocation)

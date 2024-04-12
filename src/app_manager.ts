@@ -11,7 +11,7 @@ export interface IAppManager {
 // 管理 app 的单例
 export class AppManager implements IAppManager {
   private static instance: AppManager;
-  // Todo: appInstanceMap 由 AppManager 来创建，不再由 create_app 管理
+  // TODO: appInstanceMap 由 AppManager 来创建，不再由 create_app 管理
   private appInstanceMap = appInstanceMap;
 
   public static getInstance (): AppManager {

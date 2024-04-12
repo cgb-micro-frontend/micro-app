@@ -2,7 +2,6 @@ import type { AppInterface, fiberTasks } from '@micro-app/types'
 import {
   logError,
   CompletionPath,
-  pureCreateElement,
   injectFiberTask,
   serialExecFiberTasks,
   isLinkElement,
@@ -10,22 +9,18 @@ import {
   isStyleElement,
   isImageElement,
 } from '../libs/utils'
-import { extractLinkFromHtml, fetchLinksFromHtml } from './links'
-import { extractScriptElement, fetchScriptsFromHtml, checkExcludeUrl, checkIgnoreUrl } from './scripts'
+import {
+  extractLinkFromHtml,
+  fetchLinksFromHtml,
+} from './links'
+import {
+  extractScriptElement,
+  fetchScriptsFromHtml,
+  checkExcludeUrl,
+  checkIgnoreUrl,
+} from './scripts'
 import scopedCSS from '../sandbox/scoped_css'
 import globalEnv from '../libs/global_env'
-
-/**
- * transform html string to dom
- * @param str string dom
- */
-function getWrapElement (str: string): HTMLElement {
-  const wrapDiv = pureCreateElement('div')
-
-  wrapDiv.innerHTML = str
-
-  return wrapDiv
-}
 
 /**
  * Recursively process each child element
@@ -52,7 +47,7 @@ function flatChildren (
       } else if (!(dom.hasAttribute('ignore') || checkIgnoreUrl(dom.getAttribute('href'), app.name))) {
         extractLinkFromHtml(dom, parent, app)
       } else if (dom.hasAttribute('href')) {
-        dom.setAttribute('href', CompletionPath(dom.getAttribute('href')!, app.url))
+        globalEnv.rawSetAttribute.call(dom, 'href', CompletionPath(dom.getAttribute('href')!, app.url))
       }
     } else if (isStyleElement(dom)) {
       if (dom.hasAttribute('exclude')) {
@@ -63,7 +58,7 @@ function flatChildren (
     } else if (isScriptElement(dom)) {
       extractScriptElement(dom, parent, app)
     } else if (isImageElement(dom) && dom.hasAttribute('src')) {
-      dom.setAttribute('src', CompletionPath(dom.getAttribute('src')!, app.url))
+      globalEnv.rawSetAttribute.call(dom, 'src', CompletionPath(dom.getAttribute('src')!, app.url))
     }
     /**
      * Don't remove meta and title, they have some special scenes
@@ -85,7 +80,7 @@ function flatChildren (
  * @param app app
  */
 export function extractSourceDom (htmlStr: string, app: AppInterface): void {
-  const wrapElement = getWrapElement(htmlStr)
+  const wrapElement = app.parseHtmlString(htmlStr)
   const microAppHead = globalEnv.rawElementQuerySelector.call(wrapElement, 'micro-app-head')
   const microAppBody = globalEnv.rawElementQuerySelector.call(wrapElement, 'micro-app-body')
 
@@ -107,14 +102,14 @@ export function extractSourceDom (htmlStr: string, app: AppInterface): void {
   if (app.source.links.size) {
     fetchLinksFromHtml(wrapElement, app, microAppHead, fiberStyleResult)
   } else if (fiberStyleResult) {
-    fiberStyleResult.then(() => app.onLoad(wrapElement))
+    fiberStyleResult.then(() => app.onLoad({ html: wrapElement }))
   } else {
-    app.onLoad(wrapElement)
+    app.onLoad({ html: wrapElement })
   }
 
   if (app.source.scripts.size) {
     fetchScriptsFromHtml(wrapElement, app)
   } else {
-    app.onLoad(wrapElement)
+    app.onLoad({ html: wrapElement })
   }
 }

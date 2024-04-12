@@ -1,13 +1,13 @@
 /* eslint-disable */
-// import './public-path';
+import './public-path'
 // import 'babel-polyfill'
 // import '@babel/polyfill'
 import React from 'react';
 import ReactDOM from 'react-dom';
-import 'antd/dist/antd.css';
+import './ant-custom.css'; // 自定义antd class前缀
 import './index.css';
 import Router from './router';
-import { Modal, notification } from 'antd';
+import { Modal, notification, ConfigProvider } from 'antd';
 import subMicroApp from '@micro-zoe/micro-app';
 // import './flexible';
 // import '@alifd/next/dist/next.css';
@@ -16,6 +16,10 @@ import subMicroApp from '@micro-zoe/micro-app';
 // 循环内嵌
 subMicroApp.start({
   tagName: 'micro-app-sub'
+})
+
+ConfigProvider.config({
+  prefixCls: 'react16',
 })
 
 // 数据监听
@@ -30,9 +34,9 @@ window.microApp?.addDataListener((data) => {
 }, true)
 
 function handleGlobalData(data) {
-  console.log('react16: 来自全局数据')
+  console.log('子应用react16: 来自全局数据')
   Modal.info({
-    title: 'react16: 来自全局数据',
+    title: '子应用react16: 来自全局数据',
     content: (
       <div>
         <p>{JSON.stringify(data)}</p>
@@ -57,7 +61,9 @@ window.addEventListener('appstate-change', function (e) {
 /* ----------------------分割线-默认模式--------------------- */
 // ReactDOM.render(
 //   <React.StrictMode>
-//     <Router />
+//     <ConfigProvider prefixCls="react16">
+//       <Router />
+//     </ConfigProvider>
 //   </React.StrictMode>,
 //   document.getElementById('root')
 // );
@@ -75,12 +81,16 @@ window.addEventListener('appstate-change', function (e) {
 window.mount = (data) => {
   ReactDOM.render(
     <React.StrictMode>
-      <Router />
+      {/* 自定义antd class前缀 */}
+      <ConfigProvider prefixCls="react16">
+        <Router />
+      </ConfigProvider>
     </React.StrictMode>,
     document.getElementById('root')
   );
   console.log('微应用react16渲染了 -- UMD模式', data);
   console.timeEnd('react#16');
+  console.log('微应用react16通过 microApp.getData 获取数据', window.microApp?.getData());
 }
 
 // 👇 将卸载操作放入 unmount 函数
@@ -109,21 +119,57 @@ window.onunmount = () => {
 }
 
 /* ---------------------- 全局事件 --------------------- */
-document.addEventListener('click', function () {
-  console.log(`子应用${window.__MICRO_APP_NAME__}内部的document.addEventListener(click)绑定`)
-}, false)
-
-document.onclick = () => {
-  console.log(`子应用${window.__MICRO_APP_NAME__}内部的document.onclick绑定`)
-}
-
-// window.addEventListener('scroll', () => {
-//   console.log(`scroll event from ${window.__MICRO_APP_NAME__}`)
+// document.addEventListener('click', function () {
+//   console.log(`子应用${window.__MICRO_APP_NAME__}内部的document.addEventListener绑定`)
+//   // console.log(this)
 // }, false)
 
+// document.onclick = function () {
+//   console.log(`子应用${window.__MICRO_APP_NAME__}内部的document.onclick绑定`)
+//   // console.log(this)
+// }
+
+// window.addEventListener('click', function () {
+//   console.log(`子应用${window.__MICRO_APP_NAME__}内部的window.addEventListener绑定`)
+//   // console.log(this)
+// }, false)
+
+window.onclick = function () {
+  console.log(`子应用${window.__MICRO_APP_NAME__} window.onclick`)
+}
+
+// window.addEventListener.call(document.querySelector('#root'), 'click', () => {
+//   console.log(2222222)
+// })
+
+// 测试主动卸载预渲染、隐藏keep-alive应用，事件快照重复执行的问题
+// setTimeout(() => {
+//   console.log('5秒钟倒计时结束')
+
+//   window.addEventListener('click', function () {
+//     console.log(`在定时器内部的window.addEventListener(click)`)
+//   }, false)
+
+//   document.addEventListener('click', function () {
+//     console.log(`在定时器内部的document.addEventListener(click)`)
+//   }, false)
+
+//   document.onclick = '1111'
+
+//   window.microApp?.addDataListener((data) => {
+//     console.log('在定时器内部的数据监听函数：', data)
+//   }, true)
+// }, 5000);
+
+
+/* ---------------------- 定时器 --------------------- */
 // setInterval(() => {
 //   console.log(`子应用${window.__MICRO_APP_NAME__}的setInterval`)
 // }, 5000)
+
+// setTimeout(() => {
+//   console.log(`子应用${window.__MICRO_APP_NAME__}的setTimeout`)
+// }, 5000);
 
 
 /* ---------------------- 创建元素 --------------------- */
@@ -160,7 +206,43 @@ document.onclick = () => {
 //   dynamicDiv1.parentNode.removeChild(dynamicDiv1)
 // }, 5000);
 
+// -- 测试 Element.prototype.insertAdjacentElement -- 开始
+const dynamicStyle2 = document.createElement('style')
+dynamicStyle2.textContent = '.test-insertAdjacentElement { color: red; }'
+document.head.appendChild(dynamicStyle2)
 
+const dynamicStyle3 = document.createElement('style')
+dynamicStyle3.textContent = '.test-insertAdjacentElement { color: green; }'
+dynamicStyle2.insertAdjacentElement('afterend', dynamicStyle3)
+
+document.head.insertAdjacentElement('afterbegin', dynamicStyle3)
+
+const dynamicScript3 = document.createElement('script')
+dynamicScript3.setAttribute('inline', 'true')
+dynamicScript3.textContent = `console.log('test insertAdjacentElement')`
+dynamicStyle2.insertAdjacentElement('afterend', dynamicScript3)
+
+document.head.insertAdjacentElement('afterbegin', dynamicScript3)
+// -- 测试 Element.prototype.insertAdjacentElement -- 结束
+
+// -- 测试 Element.prototype.append -- 开始
+// document.body.append(1, '2', '<div>111</div>')
+// document.body.prepend(1, '2', '<div>111</div>')
+// -- 测试 Element.prototype.append -- 结束
+
+// -- 测试 Document.prototype.createElementNS -- 开始
+// const dynamicSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+// document.body.appendChild(dynamicSvg)
+// console.assert(document.body.lastChild !== dynamicSvg)
+// -- 测试 Document.prototype.createElementNS -- 结束
+
+// -- 测试 Document.prototype.createDocumentFragment -- 开始
+// const dynamicFragment = document.createDocumentFragment()
+// const fragmentDiv = document.createElement('div')
+// fragmentDiv.innerHTML = 'fragmentDiv'
+// dynamicFragment.appendChild(fragmentDiv)
+// document.body.appendChild(dynamicFragment)
+// -- 测试 Document.prototype.createDocumentFragment -- 结束
 
 /* ---------------------- 全局变量 --------------------- */
 // console.log('__micro_app_environment__', window.__micro_app_environment__)
@@ -170,7 +252,7 @@ document.onclick = () => {
 
 
 /* ---------------------- DOMParser --------------------- */
-// BUG TEST: https://github.com/micro-zoe/micro-app/issues/56
+// // BUG TEST: https://github.com/micro-zoe/micro-app/issues/56
 // const parser = new DOMParser()
 // const htmlString = `
 // <div>
@@ -184,6 +266,7 @@ document.onclick = () => {
 
 // console.log(
 //   'DOMParser querySelector',
+//   doc.querySelector('#parser-id') instanceof Node,
 //   doc.querySelector('#parser-id'),
 //   doc.getElementById('parser-id'),
 //   doc.querySelectorAll('span'),
@@ -212,11 +295,6 @@ document.onclick = () => {
 // var img2 = newImg.cloneNode(true)
 // document.body.appendChild(img2)
 
-
-/* ---------------------- setInterval在子应用卸载时的自动清除和恢复 --------------------- */
-// setInterval(() => {
-//   console.log(4444444, document.activeElement)
-// }, 3000);
 
 /* ---------------------- requestAnimationFrame --------------------- */
 // requestAnimationFrame(() => {
@@ -271,46 +349,70 @@ if (process.env.NODE_ENV !== 'production') {
 
 
 /* ---------------------- 插件相关 --------------------- */
-window.scopeKey1 = 'scopeKey1'
-window.scopeKey2 = 'scopeKey2'
-window.scopeKey3 = 'scopeKey3'
-window.scopeKey4 = 'scopeKey4'
-window.scopeKey5 = 'scopeKey5'
-window.scopeKey6 = 'scopeKey6'
+// ----------------------- scope相关---------------------开始
+if (window.__MICRO_APP_ENVIRONMENT__) {
+  window.scopeKey1 = 'scopeKey1'
+  window.scopeKey2 = 'scopeKey2'
+  window.scopeKey3 = 'scopeKey3'
+  // window.scopeKey4 = 'scopeKey4'
+  window.scopeKey5 = 'scopeKey5'
+  window.scopeKey6 = 'scopeKey6'
 
-window.escapeKey1 = 'escapeKey1'
-window.escapeKey2 = 'escapeKey2'
-window.escapeKey3 = 'escapeKey3'
-window.escapeKey4 = 'escapeKey4'
-window.escapeKey5 = 'escapeKey5' // should be undefined in rawWindow
-window.escapeKey6 = 'escapeKey6' // should be undefined in rawWindow
+  // scopeKeyPure1、scopeKeyPure2为绑定变量，但子应用没有重新定义
+  console.assert(window.scopeKeyPure1 === undefined, 'window.scopeKeyPure1 错误')
+  console.assert(('scopeKeyPure1' in window) === false , 'scopeKeyPure1 in window 应该为false')
+  console.assert(window.scopeKeyPure2 === undefined, 'window.scopeKeyPure2 错误')
+  console.assert(('scopeKeyPure2' in window) === false , 'scopeKeyPure2 in window 应该为false')
 
+  // scopeKey1被重新定义，并且不会泄漏到原生window上，所以scopeKey1在rawWindow不存在
+  console.assert(window.scopeKey1 === 'scopeKey1', 'window.scopeKey1 错误')
+  console.assert(window.rawWindow.scopeKey1 === undefined, 'rawWindow.scopeKey1 错误')
+  console.assert(('scopeKey1' in window) === true , 'scopeKey1 in window 应该为true')
+  console.assert(('scopeKey1' in rawWindow) === false , 'scopeKey1 in rawWindow 应该为false')
 
-// console.log('scopeProperties scopeKeySpe: ', scopeKeySpe)
-// console.log('scopeProperties window.scopeKeySpe: ', window.scopeKeySpe)
+  // Vue是系统默认绑定变量
+  console.assert(window.Vue === undefined, 'window.Vue 应该为false')
+  console.assert(('Vue' in window) === false, 'Vue in window 应该为false')
+  window.Vue = '自定义Vue'
+  console.assert(window.Vue === '自定义Vue', 'window.Vue 应该为自定义Vue')
 
-// console.log('scopeProperties Vue: ', Vue)
-// console.log('scopeProperties window.Vue: ', window.Vue)
+  // ----------------------- scope相关---------------------结束
 
-// window.Vue = Vue ? Vue : 'child Vue'
+  // ----------------------- escape相关--------------------开始
+  console.assert(window.escapeKey1 === undefined, 'window.escapeKey1 兜底到主应用，但主应用不存在，为undefined')
+  console.assert(window.escapeKey3 !== undefined, 'window.escapeKey3 兜底到主应用，主应用存在该值，不为undefined')
+  window.escapeKey1 = 'escapeKey1'
+  window.escapeKey2 = 'escapeKey2'
+  window.escapeKey3 = 'escapeKey3'
+  window.escapeKey4 = 'escapeKey4'
+  window.escapeKey5 = 'escapeKey5' // should be undefined in rawWindow
+  window.escapeKey6 = 'escapeKey6' // should be undefined in rawWindow
 
-// console.log('scopeProperties Vue: ', Vue)
-// console.log('scopeProperties window.Vue: ', window.Vue)
-
-
+  console.assert(rawWindow.escapeKey5 === undefined, 'rawWindow.escapeKey5 结果错误')
+  // ----------------------- escape相关--------------------结束
+}
 
 /* ---------------------- pureCreateElement & removeDomScope --------------------- */
 if (window.__MICRO_APP_ENVIRONMENT__) {
-  const unBoundDom1 = window.microApp.pureCreateElement('div')
-  unBoundDom1.innerHTML = 'unBoundDom1'
-  document.body.appendChild(unBoundDom1)
+  // const unBoundDom1 = window.microApp.pureCreateElement('div')
+  // unBoundDom1.innerHTML = 'unBoundDom1'
+  // document.body.appendChild(unBoundDom1)
 
-  const createElement = document.createElement
-  const rawDocument = window.rawDocument
-  window.microApp.removeDomScope()
-  const unBoundDom2 = createElement.call(rawDocument, 'div')
-  unBoundDom2.innerHTML = 'unBoundDom2'
-  document.body.appendChild(unBoundDom2)
+  // /**
+  //  * !!!! 注意removeDomScope(true)是异步清空的，这里会导致一个问题
+  //  * 执行removeDomScope(true)后再执行window.mount方法，会导致子应用初始化失败
+  //  */
+  // window.microApp.removeDomScope(true)
+  // const unBoundDom2 = window.document.createElement('div')
+  // unBoundDom2.innerHTML = 'unBoundDom2'
+  // document.body.appendChild(unBoundDom2)
+
+  // const unBoundDom3 = window.rawDocument.createElement('div')
+  // unBoundDom3.innerHTML = 'unBoundDom3'
+  // document.body.appendChild(unBoundDom3)
+
+  // const dynamicSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  // document.body.appendChild(dynamicSvg)
 }
 
 
@@ -324,47 +426,60 @@ if (window.__MICRO_APP_ENVIRONMENT__) {
 // }, 0);
 
 
-/* ---------------------- location 跳转 --------------------- */
-// 依次放开每个注释来，尽可能覆盖所有场景
-setTimeout(() => {
-  // window.location.href = 'https://www.baidu.com/' // origin不同，直接跳转页面
-  // window.location.href = 'http://localhost:3001/micro-app/react16/page2' // path改变，刷新浏览器
-  // window.location.href = 'http://localhost:3001/micro-app/react16/page2#abc' // path不变，hash改变，不刷新浏览器，发送popstate、hashchange事件
-  // window.location.href = 'http://localhost:3001/micro-app/react16/page2/' // hash从有到无，刷新浏览器
-  // window.location.href = 'http://localhost:3001/micro-app/react16'
-  // window.location.href = 'http://localhost:3001/micro-app/react16/' // path相同，刷新浏览器
-  // window.location.href = 'http://localhost:3001/micro-app/react16/?a=1' // search变化，刷新浏览器
+/* ---------------------- location 相关 --------------------- */
+// 获取location信息
+if (window.__MICRO_APP_ENVIRONMENT__) {
+  console.log(`${window.__MICRO_APP_NAME__} location.href`, location.href, window.rawWindow.location.href)
+  console.log(`${window.__MICRO_APP_NAME__} location.origin`, location.origin, window.rawWindow.location.origin)
+  console.log(`${window.__MICRO_APP_NAME__} location.host`, location.host, window.rawWindow.location.host)
+  console.log(`${window.__MICRO_APP_NAME__} location.hostname`, location.hostname, window.rawWindow.location.hostname)
+  console.log(`${window.__MICRO_APP_NAME__} location.port`, location.port, window.rawWindow.location.port)
+  console.log(`${window.__MICRO_APP_NAME__} location.protocol`, location.protocol, window.rawWindow.location.protocol)
+  console.log(`${window.__MICRO_APP_NAME__} location.pathname`, location.pathname, window.rawWindow.location.pathname)
+  console.log(`${window.__MICRO_APP_NAME__} location.hash`, location.hash, window.rawWindow.location.hash)
+  console.log(`${window.__MICRO_APP_NAME__} location.search`, location.search, window.rawWindow.location.search)
+
+  // 依次放开每个注释来，尽可能覆盖所有场景
+  setTimeout(() => {
+    // window.location.href = 'https://www.baidu.com/' // origin不同，直接跳转页面
+    // window.location.href = 'http://localhost:3001/micro-app/react16/page2' // path改变，刷新浏览器
+    // window.location.href = 'http://localhost:3001/micro-app/react16/page2#abc' // path不变，hash改变，不刷新浏览器，发送popstate、hashchange事件
+    // window.location.href = 'http://localhost:3001/micro-app/react16/page2/' // hash从有到无，刷新浏览器
+    // window.location.href = 'http://localhost:3001/micro-app/react16'
+    // window.location.href = 'http://localhost:3001/micro-app/react16/' // path相同，刷新浏览器
+    // window.location.href = 'http://localhost:3001/micro-app/react16/?a=1' // search变化，刷新浏览器
 
 
-  // window.location.pathname = '/micro-app/react16/page2' // path改变，刷新浏览器
-  // window.location.pathname = '/micro-app/react16/page2#hash1' // 无法直接通过pathname修改hash的值，这里的写法是错误的，而且会导致浏览器刷新，需要完善一下
-  // window.location.pathname = '/micro-app/react16/page2?b=2'
+    // window.location.pathname = '/micro-app/react16/page2' // path改变，刷新浏览器
+    // window.location.pathname = '/micro-app/react16/page2#hash1' // 无法直接通过pathname修改hash的值，这里的写法是错误的，而且会导致浏览器刷新，需要完善一下
+    // window.location.pathname = '/micro-app/react16/page2?b=2'
 
-  // window.location.search = '?c=3' // search改变，刷新浏览器
-  // window.location.search = '?c=3' // search不变，刷新浏览器
+    // window.location.search = '?c=3' // search改变，刷新浏览器
+    // window.location.search = '?c=3' // search不变，刷新浏览器
 
-  // window.location.hash = '#a' // hash改变，不刷新浏览器
-  // window.location.hash = '#a' // hash不变，不刷新浏览器
+    // window.location.hash = '#a' // hash改变，不刷新浏览器
+    // window.location.hash = '#a' // hash不变，不刷新浏览器
 
 
-  // window.location.assign('http://localhost:3001/micro-app/react16/page2') // path改变，刷新浏览器
-  // window.location.assign('http://localhost:3001/micro-app/react16/page2#abc') // path不变，hash改变，不刷新浏览器，发送popstate、hashchange事件
+    // window.location.assign('http://localhost:3001/micro-app/react16/page2') // path改变，刷新浏览器
+    // window.location.assign('http://localhost:3001/micro-app/react16/page2#abc') // path不变，hash改变，不刷新浏览器，发送popstate、hashchange事件
 
-  // window.location.replace('http://localhost:3001/micro-app/react16/page2') // 同上
-  // window.location.replace('http://localhost:3001/micro-app/react16/page2#abc') // 同上
-  // console.log(111111, window.location)
+    // window.location.replace('http://localhost:3001/micro-app/react16/page2') // 同上
+    // window.location.replace('http://localhost:3001/micro-app/react16/page2#abc') // 同上
+    // console.log(111111, window.location)
 
-  // window.history.scrollRestoration = 'manual'
-}, 5000);
+    // window.history.scrollRestoration = 'manual'
+  }, 5000);
+}
 
 
 /* ---------------------- popstate 和 hashchange --------------------- */
 window.addEventListener('popstate', (e) => {
-  console.log('子应用 popstate', e)
+  console.log(`子应用 ${window.__MICRO_APP_NAME__} popstate`, e)
 })
 
 window.addEventListener('hashchange', (e) => {
-  console.log('子应用 hashchange', e, e.newURL, e.oldURL)
+  console.log(`子应用 ${window.__MICRO_APP_NAME__} hashchange`, e, e.newURL, e.oldURL)
 })
 
 
@@ -413,3 +528,36 @@ window.addEventListener('hashchange', (e) => {
 // console.log(`document.getElementsByTagName('meta')[0]: `, document.getElementsByTagName('meta')[0])
 
 // console.log('document.firstElementChild: ', document.firstElementChild)
+
+// console.log('console === parent.console: ', console === parent.console)
+
+console.log('micro-app容器元素document.microAppElement', document.microAppElement)
+
+// --- document.querySelector(':root'), document.documentElement 和 动态设置css变量
+// console.log(`document.querySelector(':root'): `, document.querySelector(':root'), document.querySelector(':root') === document.documentElement)
+
+/* ---------------------- 测试重写Array.prototype.includes导致的死循环问题 --------------------- */
+// const oldIncludes = Array.prototype.includes
+
+// Array.prototype.includes = function includes (searchElement, fromIndex) {
+//   // 这样写还会导致切换子应用失败，原因是主应用切换路由时触发includes，元素作用域绑定到子应用，导致主应用的js被拦截
+//   console.assert(window.testRewriteIncludes === undefined)
+//   console.assert('testRewriteIncludes' in window === false)
+//   return oldIncludes.call(this, searchElement, fromIndex)
+// }
+
+
+/* ---------------------- 测试unhandledrejection --------------------- */
+// https://github.com/micro-zoe/micro-app/issues/1102
+// window.addEventListener('unhandledrejection', (event) => {
+//   console.error(`子应用Promise报错监听 -- window.addEventListener(unhandledrejection): `, event)
+//   event.preventDefault()
+// })
+
+// window.onunhandledrejection = (event) => {
+//   console.error(`子应用Promise报错监听 -- window.onunhandledrejection: `, event);
+// }
+
+// new Promise((resolve, reject) => {
+//   throw 'promise 逃逸的错误'
+// })

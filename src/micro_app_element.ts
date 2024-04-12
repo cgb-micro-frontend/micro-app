@@ -4,7 +4,11 @@ import type {
   MicroAppElementType,
   AppInterface,
   OptionsType,
+  NormalKey,
 } from '@micro-app/types'
+import microApp from './micro_app'
+import dispatchLifecyclesEvent from './interact/lifecycles_event'
+import globalEnv from './libs/global_env'
 import {
   defer,
   formatAppName,
@@ -16,34 +20,32 @@ import {
   isFunction,
   CompletionPath,
   createURL,
+  isPlainObject,
+  getEffectivePath,
+  getBaseHTMLElement,
 } from './libs/utils'
 import {
   ObservedAttrName,
-  appStates,
   lifeCycles,
-  keepAliveStates,
+  appStates,
 } from './constants'
-import CreateApp, { appInstanceMap } from './create_app'
-import { patchSetAttribute } from './source/patch'
-import microApp from './micro_app'
-import dispatchLifecyclesEvent from './interact/lifecycles_event'
-import globalEnv from './libs/global_env'
-import { getNoHashMicroPathFromURL, router } from './sandbox/with'
+import CreateApp, {
+  appInstanceMap,
+} from './create_app'
+import {
+  router,
+  getNoHashMicroPathFromURL,
+  initRouterMode,
+} from './sandbox/router'
 
 /**
  * define element
  * @param tagName element name
- */
+*/
 export function defineElement (tagName: string): void {
-  class MicroAppElement extends HTMLElement implements MicroAppElementType {
+  class MicroAppElement extends getBaseHTMLElement() implements MicroAppElementType {
     static get observedAttributes (): string[] {
       return ['name', 'url']
-    }
-
-    constructor () {
-      super()
-      // patchSetAttribute hijiack data attribute, it needs exec first
-      patchSetAttribute()
     }
 
     private isWaiting = false
@@ -121,16 +123,12 @@ export function defineElement (tagName: string): void {
      */
     private handleDisconnected (destroy = false, callback?: CallableFunction): void {
       const app = appInstanceMap.get(this.appName)
-      if (
-        app &&
-        app.getAppState() !== appStates.UNMOUNT &&
-        app.getKeepAliveState() !== keepAliveStates.KEEP_ALIVE_HIDDEN
-      ) {
+      if (app && !app.isUnmounted() && !app.isHidden()) {
         // keep-alive
         if (this.getKeepAliveModeResult() && !destroy) {
           this.handleHiddenKeepAliveApp(callback)
         } else {
-          this.handleUnmount(destroy || this.getDestroyCompatibleResult(), callback)
+          this.unmount(destroy, callback)
         }
       }
     }
@@ -140,20 +138,31 @@ export function defineElement (tagName: string): void {
         this.legalAttribute(attr, newVal) &&
         this[attr === ObservedAttrName.NAME ? 'appName' : 'appUrl'] !== newVal
       ) {
-        if (attr === ObservedAttrName.URL && !this.appUrl) {
+        if (
+          attr === ObservedAttrName.URL && (
+            !this.appUrl ||
+            !this.connectStateMap.get(this.connectedCount) // TODO: 这里的逻辑可否再优化一下
+          )
+        ) {
           newVal = formatAppURL(newVal, this.appName)
           if (!newVal) {
             return logError(`Invalid attribute url ${newVal}`, this.appName)
           }
           this.appUrl = newVal
           this.handleInitialNameAndUrl()
-        } else if (attr === ObservedAttrName.NAME && !this.appName) {
+        } else if (
+          attr === ObservedAttrName.NAME && (
+            !this.appName ||
+            !this.connectStateMap.get(this.connectedCount) // TODO: 这里的逻辑可否再优化一下
+          )
+        ) {
           const formatNewName = formatAppName(newVal)
 
           if (!formatNewName) {
             return logError(`Invalid attribute name ${newVal}`, this.appName)
           }
 
+          // TODO: 当micro-app还未插入文档中就修改name，逻辑可否再优化一下
           if (this.cacheData) {
             microApp.setData(formatNewName, this.cacheData)
             this.cacheData = null
@@ -187,11 +196,10 @@ export function defineElement (tagName: string): void {
       }
 
       this.updateSsrUrl(this.appUrl)
-
       if (appInstanceMap.has(this.appName)) {
-        const app = appInstanceMap.get(this.appName)!
-        const existAppUrl = app.ssrUrl || app.url
-        const targetAppUrl = this.ssrUrl || this.appUrl
+        const oldApp = appInstanceMap.get(this.appName)!
+        const oldAppUrl = oldApp.ssrUrl || oldApp.url
+        const targetUrl = this.ssrUrl || this.appUrl
         /**
          * NOTE:
          * 1. keep-alive don't care about ssrUrl
@@ -199,36 +207,30 @@ export function defineElement (tagName: string): void {
          * 3. When scopecss, useSandbox of prefetch app different from target app, delete prefetch app and create new one
          */
         if (
-          app.getKeepAliveState() === keepAliveStates.KEEP_ALIVE_HIDDEN &&
-          app.url === this.appUrl
+          oldApp.isHidden() &&
+          oldApp.url === this.appUrl
         ) {
-          this.handleShowKeepAliveApp(app)
+          this.handleShowKeepAliveApp(oldApp)
         } else if (
-          existAppUrl === targetAppUrl && (
-            app.getAppState() === appStates.UNMOUNT ||
+          oldAppUrl === targetUrl && (
+            oldApp.isUnmounted() ||
             (
-              app.isPrefetch && (
-                app.scopecss === this.isScopecss() &&
-                app.useSandbox === this.isSandbox()
-              )
+              oldApp.isPrefetch &&
+              this.sameCoreOptions(oldApp)
             )
           )
         ) {
-          this.handleAppMount(app)
-        } else if (app.isPrefetch || app.getAppState() === appStates.UNMOUNT) {
-          if (
-            __DEV__ &&
-            app.scopecss === this.isScopecss() &&
-            app.useSandbox === this.isSandbox()
-          ) {
+          this.handleMount(oldApp)
+        } else if (oldApp.isPrefetch || oldApp.isUnmounted()) {
+          if (__DEV__ && this.sameCoreOptions(oldApp)) {
             /**
              * url is different & old app is unmounted or prefetch, create new app to replace old one
              */
-            logWarn(`the ${app.isPrefetch ? 'prefetch' : 'unmounted'} app with url: ${existAppUrl} replaced by a new app with url: ${targetAppUrl}`, this.appName)
+            logWarn(`the ${oldApp.isPrefetch ? 'prefetch' : 'unmounted'} app with url ${oldAppUrl} replaced by a new app with url ${targetUrl}`, this.appName)
           }
           this.handleCreateApp()
         } else {
-          logError(`app name conflict, an app named: ${this.appName} with url: ${existAppUrl} is running`)
+          logError(`app name conflict, an app named ${this.appName} with url ${oldAppUrl} is running`)
         }
       } else {
         this.handleCreateApp()
@@ -240,18 +242,15 @@ export function defineElement (tagName: string): void {
      */
     private handleAttributeUpdate = (): void => {
       this.isWaiting = false
-      if (!this.connectStateMap.get(this.connectedCount)) return
       const formatAttrName = formatAppName(this.getAttribute('name'))
       const formatAttrUrl = formatAppURL(this.getAttribute('url'), this.appName)
       if (this.legalAttribute('name', formatAttrName) && this.legalAttribute('url', formatAttrUrl)) {
-        const existApp = appInstanceMap.get(formatAttrName)
-        if (formatAttrName !== this.appName && existApp) {
-          // handling of cached and non-prefetch apps
-          if (
-            appStates.UNMOUNT !== existApp.getAppState() &&
-            keepAliveStates.KEEP_ALIVE_HIDDEN !== existApp.getKeepAliveState() &&
-            !existApp.isPrefetch
-          ) {
+        const oldApp = appInstanceMap.get(formatAttrName)
+        /**
+         * If oldApp exist & appName is different, determine whether oldApp is running
+         */
+        if (formatAttrName !== this.appName && oldApp) {
+          if (!oldApp.isUnmounted() && !oldApp.isHidden() && !oldApp.isPrefetch) {
             this.setAttribute('name', this.appName)
             return logError(`app name conflict, an app named ${formatAttrName} is running`)
           }
@@ -259,19 +258,16 @@ export function defineElement (tagName: string): void {
 
         if (formatAttrName !== this.appName || formatAttrUrl !== this.appUrl) {
           if (formatAttrName === this.appName) {
-            this.handleUnmount(true, () => {
-              this.actionsForAttributeChange(formatAttrName, formatAttrUrl, existApp)
+            this.unmount(true, () => {
+              this.actionsForAttributeChange(formatAttrName, formatAttrUrl, oldApp)
             })
           } else if (this.getKeepAliveModeResult()) {
             this.handleHiddenKeepAliveApp()
-            this.actionsForAttributeChange(formatAttrName, formatAttrUrl, existApp)
+            this.actionsForAttributeChange(formatAttrName, formatAttrUrl, oldApp)
           } else {
-            this.handleUnmount(
-              this.getDestroyCompatibleResult(),
-              () => {
-                this.actionsForAttributeChange(formatAttrName, formatAttrUrl, existApp)
-              }
-            )
+            this.unmount(false, () => {
+              this.actionsForAttributeChange(formatAttrName, formatAttrUrl, oldApp)
+            })
           }
         }
       } else if (formatAttrName !== this.appName) {
@@ -283,7 +279,7 @@ export function defineElement (tagName: string): void {
     private actionsForAttributeChange (
       formatAttrName: string,
       formatAttrUrl: string,
-      existApp: AppInterface | void,
+      oldApp: AppInterface | void,
     ): void {
       /**
        * do not add judgment of formatAttrUrl === this.appUrl
@@ -298,24 +294,36 @@ export function defineElement (tagName: string): void {
       }
 
       /**
-       * when existApp not null: this.appName === existApp.name
-       * scene1: if formatAttrName and this.appName are equal: exitApp is the current app, the url must be different, existApp has been unmounted
-       * scene2: if formatAttrName and this.appName are different: existApp must be prefetch or unmounted, if url is equal, then just mount, if url is different, then create new app to replace existApp
+       * when oldApp not null: this.appName === oldApp.name
+       * scene1: if formatAttrName and this.appName are equal: exitApp is the current app, the url must be different, oldApp has been unmounted
+       * scene2: if formatAttrName and this.appName are different: oldApp must be prefetch or unmounted, if url is equal, then just mount, if url is different, then create new app to replace oldApp
        * scene3: url is different but ssrUrl is equal
        * scene4: url is equal but ssrUrl is different, if url is equal, name must different
-       * scene5: if existApp is KEEP_ALIVE_HIDDEN, name must different
+       * scene5: if oldApp is KEEP_ALIVE_HIDDEN, name must different
        */
-      if (existApp) {
-        if (existApp.getKeepAliveState() === keepAliveStates.KEEP_ALIVE_HIDDEN) {
-          if (existApp.url === this.appUrl) {
-            this.handleShowKeepAliveApp(existApp)
+      if (oldApp) {
+        if (oldApp.isHidden()) {
+          if (oldApp.url === this.appUrl) {
+            this.handleShowKeepAliveApp(oldApp)
           } else {
             // the hidden keep-alive app is still active
             logError(`app name conflict, an app named ${this.appName} is running`)
           }
-        } else if (existApp.url === this.appUrl && existApp.ssrUrl === this.ssrUrl) {
+        /**
+         * TODO:
+         *  1. oldApp必是unmountApp或preFetchApp，这里还应该考虑沙箱、iframe、样式隔离不一致的情况
+         *  2. unmountApp要不要判断样式隔离、沙箱、iframe，然后彻底删除并再次渲染？(包括handleConnected里的处理，先不改？)
+         * 推荐：if (
+         *  oldApp.url === this.appUrl &&
+         *  oldApp.ssrUrl === this.ssrUrl && (
+         *    oldApp.isUnmounted() ||
+         *    (oldApp.isPrefetch && this.sameCoreOptions(oldApp))
+         *  )
+         * )
+         */
+        } else if (oldApp.url === this.appUrl && oldApp.ssrUrl === this.ssrUrl) {
           // mount app
-          this.handleAppMount(existApp)
+          this.handleMount(oldApp)
         } else {
           this.handleCreateApp()
         }
@@ -332,7 +340,6 @@ export function defineElement (tagName: string): void {
     private legalAttribute (name: string, val: AttrType): boolean {
       if (!isString(val) || !val) {
         logError(`unexpected attribute ${name}, please check again`, this.appName)
-
         return false
       }
 
@@ -341,25 +348,36 @@ export function defineElement (tagName: string): void {
 
     // create app instance
     private handleCreateApp (): void {
-      /**
-       * actions for destroy old app
-       * fix of unmounted umd app with disableSandbox
-       */
-      if (appInstanceMap.has(this.appName)) {
-        appInstanceMap.get(this.appName)!.actionsForCompletelyDestroy()
-      }
-
-      new CreateApp({
+      const createAppInstance = () => new CreateApp({
         name: this.appName,
         url: this.appUrl,
-        scopecss: this.isScopecss(),
-        useSandbox: this.isSandbox(),
-        inline: this.getDisposeResult('inline'),
-        esmodule: this.getDisposeResult('esmodule'),
-        iframe: this.getDisposeResult('iframe'),
         container: this.shadowRoot ?? this,
+        scopecss: this.useScopecss(),
+        useSandbox: this.useSandbox(),
+        inline: this.getDisposeResult('inline'),
+        iframe: this.getDisposeResult('iframe'),
         ssrUrl: this.ssrUrl,
+        routerMode: this.getMemoryRouterMode(),
       })
+
+      /**
+       * Actions for destroy old app
+       * If oldApp exist, it must be 3 scenes:
+       *  1. oldApp is unmounted app (url is is different)
+       *  2. oldApp is prefetch, not prerender (url, scopecss, useSandbox, iframe is different)
+       *  3. oldApp is prerender (url, scopecss, useSandbox, iframe is different)
+       */
+      const oldApp = appInstanceMap.get(this.appName)
+      if (oldApp) {
+        if (oldApp.isPrerender) {
+          this.unmount(true, createAppInstance)
+        } else {
+          oldApp.actionsForCompletelyDestroy()
+          createAppInstance()
+        }
+      } else {
+        createAppInstance()
+      }
     }
 
     /**
@@ -369,8 +387,14 @@ export function defineElement (tagName: string): void {
      * 2. is remount in another container ?
      * 3. is remount with change properties of the container ?
      */
-    private handleAppMount (app: AppInterface): void {
+    private handleMount (app: AppInterface): void {
       app.isPrefetch = false
+      /**
+       * Fix error when navigate before app.mount by microApp.router.push(...)
+       * Issue: https://github.com/micro-zoe/micro-app/issues/908
+       */
+      app.setAppState(appStates.BEFORE_MOUNT)
+      // exec mount async, simulate the first render scene
       defer(() => this.mount(app))
     }
 
@@ -381,28 +405,24 @@ export function defineElement (tagName: string): void {
       app.mount({
         container: this.shadowRoot ?? this,
         inline: this.getDisposeResult('inline'),
-        useMemoryRouter: !this.getDisposeResult('disable-memory-router'),
-        defaultPage: this.getDefaultPageValue(),
+        routerMode: this.getMemoryRouterMode(),
         baseroute: this.getBaseRouteCompatible(),
+        defaultPage: this.getDefaultPage(),
         disablePatchRequest: this.getDisposeResult('disable-patch-request'),
         fiber: this.getDisposeResult('fiber'),
-        esmodule: this.getDisposeResult('esmodule'),
-        // hiddenRouter: this.getDisposeResult('hidden-router'),
       })
     }
 
     /**
      * unmount app
      * @param destroy delete cache resources when unmount
+     * @param unmountcb callback
      */
-    private handleUnmount (destroy: boolean, unmountcb?: CallableFunction): void {
+    public unmount (destroy?: boolean, unmountcb?: CallableFunction): void {
       const app = appInstanceMap.get(this.appName)
-      if (
-        app &&
-        app.getAppState() !== appStates.UNMOUNT
-      ) {
+      if (app && !app.isUnmounted()) {
         app.unmount({
-          destroy,
+          destroy: destroy || this.getDestroyCompatibleResult(),
           clearData: this.getDisposeResult('clear-data'),
           keepRouteState: this.getDisposeResult('keep-router-state'),
           unmountcb,
@@ -413,11 +433,7 @@ export function defineElement (tagName: string): void {
     // hidden app when disconnectedCallback called with keep-alive
     private handleHiddenKeepAliveApp (callback?: CallableFunction): void {
       const app = appInstanceMap.get(this.appName)
-      if (
-        app &&
-        app.getAppState() !== appStates.UNMOUNT &&
-        app.getKeepAliveState() !== keepAliveStates.KEEP_ALIVE_HIDDEN
-      ) {
+      if (app && !app.isUnmounted() && !app.isHidden()) {
         app.hiddenKeepAliveApp(callback)
       }
     }
@@ -457,12 +473,23 @@ export function defineElement (tagName: string): void {
       return this.getAttribute(name) !== 'false'
     }
 
-    private isScopecss (): boolean {
+    private useScopecss (): boolean {
       return !(this.getDisposeResult('disable-scopecss') || this.getDisposeResult('shadowDOM'))
     }
 
-    private isSandbox (): boolean {
+    private useSandbox (): boolean {
       return !this.getDisposeResult('disable-sandbox')
+    }
+
+    /**
+     * Determine whether the core options of the existApp is consistent with the new one
+     */
+    private sameCoreOptions (app: AppInterface): boolean {
+      return (
+        app.scopecss === this.useScopecss() &&
+        app.useSandbox === this.useSandbox() &&
+        app.iframe === this.getDisposeResult('iframe')
+      )
     }
 
     /**
@@ -491,13 +518,15 @@ export function defineElement (tagName: string): void {
      */
     private updateSsrUrl (baseUrl: string): void {
       if (this.getDisposeResult('ssr')) {
+        // TODO: disable-memory-router不存在了，这里需要更新一下
         if (this.getDisposeResult('disable-memory-router') || this.getDisposeResult('disableSandbox')) {
           const rawLocation = globalEnv.rawWindow.location
           this.ssrUrl = CompletionPath(rawLocation.pathname + rawLocation.search, baseUrl)
         } else {
           // get path from browser URL
+          // TODO: 新版本路由系统要重新兼容ssr
           let targetPath = getNoHashMicroPathFromURL(this.appName, baseUrl)
-          const defaultPagePath = this.getDefaultPageValue()
+          const defaultPagePath = this.getDefaultPage()
           if (!targetPath && defaultPagePath) {
             const targetLocation = createURL(defaultPagePath, baseUrl)
             targetPath = targetLocation.origin + targetLocation.pathname + targetLocation.search
@@ -512,13 +541,49 @@ export function defineElement (tagName: string): void {
     /**
      * get config of default page
      */
-    private getDefaultPageValue (): string {
+    private getDefaultPage (): string {
       return (
         router.getDefaultPage(this.appName) ||
         this.getAttribute('default-page') ||
         this.getAttribute('defaultPage') ||
         ''
       )
+    }
+
+    /**
+     * get config of router-mode
+     * @returns router-mode
+     */
+    private getMemoryRouterMode () : string {
+      return initRouterMode(
+        this.getAttribute('router-mode'),
+        // is micro-app element set disable-memory-router, like <micro-app disable-memory-router></micro-app>
+        // or <micro-app disable-memory-router='false'></micro-app>
+        this.compatibleProperties('disable-memory-router') && this.compatibleDisableProperties('disable-memory-router'),
+      )
+    }
+
+    /**
+     * rewrite micro-app.setAttribute, process attr data
+     * @param key attr name
+     * @param value attr value
+     */
+    public setAttribute (key: string, value: any): void {
+      if (key === 'data') {
+        if (isPlainObject(value)) {
+          const cloneValue: Record<NormalKey, unknown> = {}
+          Object.getOwnPropertyNames(value).forEach((ownKey: NormalKey) => {
+            if (!(isString(ownKey) && ownKey.indexOf('__') === 0)) {
+              cloneValue[ownKey] = value[ownKey]
+            }
+          })
+          this.data = cloneValue
+        } else if (value !== '[object Object]') {
+          logWarn('property data must be an object', this.appName)
+        }
+      } else {
+        globalEnv.rawSetAttribute.call(this, key, value)
+      }
     }
 
     /**
@@ -542,6 +607,20 @@ export function defineElement (tagName: string): void {
         return this.cacheData
       }
       return null
+    }
+
+    /**
+     * get publicPath from a valid address,it can used in micro-app-devtools
+     */
+    get publicPath (): string {
+      return getEffectivePath(this.appUrl)
+    }
+
+    /**
+     * get baseRoute from attribute,it can used in micro-app-devtools
+     */
+    get baseRoute (): string {
+      return this.getBaseRouteCompatible()
     }
   }
 

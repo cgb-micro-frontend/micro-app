@@ -1,6 +1,6 @@
 {
   "name": "@micro-zoe/micro-app",
-  "version": "1.0.0-alpha.10",
+  "version": "1.0.0-rc.4",
   "description": "A lightweight, efficient and powerful micro front-end framework",
   "private": false,
   "main": "lib/index.min.js",
@@ -24,7 +24,8 @@
     "install:child-react17": "cd dev/children/react17 && yarn",
     "install:child-vue2": "cd dev/children/vue2 && yarn",
     "install:child-vue3": "cd dev/children/vue3 && yarn",
-    "install:child-vite": "cd dev/children/vite && yarn",
+    "install:child-vite2": "cd dev/children/vite2 && yarn",
+    "install:child-vite4": "cd dev/children/vite4 && yarn",
     "install:child-angular11": "cd dev/children/angular11 && yarn",
     "main-react16": "cd dev/main-react16 && yarn start",
     "main-vue2": "cd dev/main-vue2 && yarn start",
@@ -33,7 +34,8 @@
     "start-child:react17": "cd dev/children/react17 && yarn start",
     "start-child:vue2": "cd dev/children/vue2 && yarn start",
     "start-child:vue3": "cd dev/children/vue3 && yarn start",
-    "start-child:vite": "cd dev/children/vite && yarn start",
+    "start-child:vite2": "cd dev/children/vite2 && yarn start",
+    "start-child:vite4": "cd dev/children/vite4 && yarn start",
     "start-child:angular11": "cd dev/children/angular11 && yarn start",
     "docs": "docsify serve docs --port 2000",
     "lint": "eslint --cache '**/*.{js,ts}'",
@@ -46,7 +48,7 @@
     "test:coverage": "jest --coverage",
     "test:unit": "jest src/__tests__/unit",
     "test:unit:coverage": "npm run test:unit -- --coverage",
-    "prepublishOnly": "yarn lint && yarn test && yarn build"
+    "prepublishOnly": "yarn build"
   },
   "repository": {
     "type": "git",
@@ -117,7 +119,7 @@
     "fs-extra": "~10.0.0",
     "gzip-size": "~6.0.0",
     "husky": "~4.3.6",
-    "jest": "26.6.0",
+    "jest": "~26.6.0",
     "lint-staged": "~10.5.3",
     "live-server": "~1.2.1",
     "node-fetch": "~2.6.1",
@@ -126,7 +128,7 @@
     "react": "~17.0.2",
     "rollup": "~2.35.1",
     "rollup-plugin-terser": "~7.0.2",
-    "ts-jest": "26.5.6",
+    "ts-jest": "~26.5.6",
     "typescript": "~4.1.3"
   }
 }

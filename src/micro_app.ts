@@ -24,9 +24,9 @@ import {
   isFunction,
 } from './libs/utils'
 import { EventCenterForBaseApp } from './interact'
-import { initGlobalEnv } from './libs/global_env'
+import globalEnv, { initGlobalEnv } from './libs/global_env'
 import { appInstanceMap } from './create_app'
-import { appStates, keepAliveStates, lifeCycles } from './constants'
+import { lifeCycles } from './constants'
 import { router } from './sandbox/router'
 
 /**
@@ -42,7 +42,7 @@ export function getActiveApps ({
   const activeApps: AppName[] = []
   appInstanceMap.forEach((app: AppInterface, appName: AppName) => {
     if (
-      appStates.UNMOUNT !== app.getAppState() &&
+      !app.isUnmounted() &&
       (
         !app.isPrefetch || (
           app.isPrerender && !excludePreRender
@@ -50,7 +50,7 @@ export function getActiveApps ({
       ) &&
       (
         !excludeHiddenApp ||
-        keepAliveStates.KEEP_ALIVE_HIDDEN !== app.getKeepAliveState()
+        !app.isHidden()
       )
     ) {
       activeApps.push(appName)
@@ -79,14 +79,21 @@ type unmountAppOptions = {
  */
 export function unmountApp (appName: string, options?: unmountAppOptions): Promise<boolean> {
   const app = appInstanceMap.get(formatAppName(appName))
-  return new Promise((resolve) => { // eslint-disable-line
+  return new Promise((resolve) => {
     if (app) {
-      if (app.getAppState() === appStates.UNMOUNT || app.isPrefetch) {
-        if (options?.destroy) {
-          app.actionsForCompletelyDestroy()
+      if (app.isUnmounted() || app.isPrefetch) {
+        if (app.isPrerender) {
+          app.unmount({
+            destroy: !!options?.destroy,
+            clearData: !!options?.clearData,
+            keepRouteState: false,
+            unmountcb: resolve.bind(null, true)
+          })
+        } else {
+          if (options?.destroy) app.actionsForCompletelyDestroy()
+          resolve(true)
         }
-        resolve(true)
-      } else if (app.getKeepAliveState() === keepAliveStates.KEEP_ALIVE_HIDDEN) {
+      } else if (app.isHidden()) {
         if (options?.destroy) {
           app.unmount({
             destroy: true,
@@ -137,7 +144,7 @@ export function unmountApp (appName: string, options?: unmountAppOptions): Promi
           const keepAliveAttrValue = container.getAttribute('keep-alive')!
           container.removeAttribute('keep-alive')
 
-          let clearDataAttrValue
+          let clearDataAttrValue = null
           if (options.clearData) {
             clearDataAttrValue = container.getAttribute('clear-data')
             container.setAttribute('clear-data', 'true')
@@ -148,7 +155,7 @@ export function unmountApp (appName: string, options?: unmountAppOptions): Promi
           container.setAttribute('keep-alive', keepAliveAttrValue)
           isString(clearDataAttrValue) && container.setAttribute('clear-data', clearDataAttrValue)
         } else {
-          let clearDataAttrValue
+          let clearDataAttrValue = null
           if (options?.clearData) {
             clearDataAttrValue = container.getAttribute('clear-data')
             container.setAttribute('clear-data', 'true')
@@ -262,8 +269,23 @@ export function renderApp (options: RenderAppOptions): Promise<boolean> {
   })
 }
 
+/**
+ * get app state
+ * @param appName app.name
+ * @returns app.state
+ */
+export function getAppStatus (appName: string): string | void {
+  const app = appInstanceMap.get(formatAppName(appName))
+  if (app) {
+    return app.getLifeCycleState()
+  } else {
+    logWarn(`app ${appName} does not exist`)
+  }
+}
+
 export class MicroApp extends EventCenterForBaseApp implements MicroAppBaseType {
   tagName = 'micro-app'
+  hasInit = false
   options: OptionsType = {}
   router: Router = router
   preFetch = preFetch
@@ -273,10 +295,22 @@ export class MicroApp extends EventCenterForBaseApp implements MicroAppBaseType 
   getAllApps = getAllApps
   reload = reload
   renderApp = renderApp
+  getAppStatus = getAppStatus
   start (options?: OptionsType): void {
     if (!isBrowser || !window.customElements) {
       return logError('micro-app is not supported in this environment')
     }
+
+    /**
+     * TODO: 优化代码和逻辑
+     *  1、同一个基座中initGlobalEnv不能被多次执行，否则会导致死循环
+     *  2、判断逻辑是否放在initGlobalEnv中合适？--- 不合适
+     */
+    if (this.hasInit) {
+      return logError('microApp.start executed repeatedly')
+    }
+
+    this.hasInit = true
 
     if (options?.tagName) {
       if (/^micro-app(-\S+)?/.test(options.tagName)) {
@@ -286,11 +320,11 @@ export class MicroApp extends EventCenterForBaseApp implements MicroAppBaseType 
       }
     }
 
-    if (window.customElements.get(this.tagName)) {
+    initGlobalEnv()
+
+    if (globalEnv.rawWindow.customElements.get(this.tagName)) {
       return logWarn(`element ${this.tagName} is already defined`)
     }
-
-    initGlobalEnv()
 
     if (isPlainObject<OptionsType>(options)) {
       this.options = options

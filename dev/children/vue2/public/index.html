@@ -10,6 +10,19 @@
     <!-- <script src='http://127.0.0.1:8080/test.js' global></script> -->
     <!-- <link rel="stylesheet" href="<%= BASE_URL %>layui/css/layui.css" />
     <script src="<%= BASE_URL %>layui/layui.js"></script> -->
+    <script>
+      try {
+        console.log('window.Vue: ', window.Vue, 'Vue in window: ', 'Vue' in window)
+        ;eval('console.log("html自带script的eval", window)')
+      } catch (e) {
+        console.log(e)
+      }
+      // setTimeout(() => {
+      //   const dynamicScript = document.createElement('script')
+      //   dynamicScript.textContent = `eval('console.log("动态创建的script的eval", window)')`
+      //   document.body.appendChild(dynamicScript)
+      // }, 3000);
+    </script>
   </head>
   <body>
     <noscript>

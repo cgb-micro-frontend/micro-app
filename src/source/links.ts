@@ -21,6 +21,7 @@ import {
   dispatchOnErrorEvent,
 } from './load_event'
 import sourceCenter from './source_center'
+import globalEnv from '../libs/global_env'
 
 /**
  *
@@ -37,7 +38,7 @@ function getExistParseCode (
     if (item !== appName) {
       const appSpaceData = appSpace[item]
       if (appSpaceData.parsedCode) {
-        return appSpaceData.parsedCode.replaceAll(new RegExp(createPrefix(item, true), 'g'), prefix)
+        return appSpaceData.parsedCode.replace(new RegExp(createPrefix(item, true), 'g'), prefix)
       }
     }
   }
@@ -48,7 +49,7 @@ function setConvertStyleAttr (convertStyle: HTMLStyleElement, attrs: AttrsType):
   attrs.forEach((value, key) => {
     if (key === 'rel') return
     if (key === 'href') key = 'data-origin-href'
-    convertStyle.setAttribute(key, value)
+    globalEnv.rawSetAttribute.call(convertStyle, key, value)
   })
 }
 
@@ -62,7 +63,7 @@ function setConvertStyleAttr (convertStyle: HTMLStyleElement, attrs: AttrsType):
  */
 export function extractLinkFromHtml (
   link: HTMLLinkElement,
-  parent: Node,
+  parent: Node | null,
   app: AppInterface,
   isDynamic = false,
 ): any {
@@ -95,22 +96,22 @@ export function extractLinkFromHtml (
     } else {
       return { address: href, linkInfo }
     }
-  } else if (rel && ['prefetch', 'preload', 'prerender', 'icon', 'apple-touch-icon'].includes(rel)) {
-    // preload prefetch icon ....
+  } else if (rel && ['prefetch', 'preload', 'prerender', 'modulepreload'].includes(rel)) {
+    // preload prefetch prerender ....
     if (isDynamic) {
       replaceComment = document.createComment(`link element with rel=${rel}${href ? ' & href=' + href : ''} removed by micro-app`)
     } else {
-      parent.removeChild(link)
+      parent?.removeChild(link)
     }
   } else if (href) {
     // dns-prefetch preconnect modulepreload search ....
-    link.setAttribute('href', CompletionPath(href, app.url))
+    globalEnv.rawSetAttribute.call(link, 'href', CompletionPath(href, app.url))
   }
 
   if (isDynamic) {
     return { replaceComment }
   } else if (replaceComment) {
-    return parent.replaceChild(replaceComment, link)
+    return parent?.replaceChild(replaceComment, link)
   }
 }
 
@@ -132,7 +133,7 @@ export function fetchLinksFromHtml (
     return linkInfo.code ? linkInfo.code : fetchSource(address, app.name)
   })
 
-  const fiberLinkTasks: fiberTasks = app.isPrefetch || app.fiber ? [] : null
+  const fiberLinkTasks: fiberTasks = fiberStyleResult ? [] : null
 
   promiseStream<string>(fetchLinkPromise, (res: { data: string, index: number }) => {
     injectFiberTask(fiberLinkTasks, () => fetchLinkSuccess(
@@ -144,18 +145,18 @@ export function fetchLinksFromHtml (
   }, (err: {error: Error, index: number}) => {
     logError(err, app.name)
   }, () => {
-    if (fiberLinkTasks) {
-      /**
-       * 1. If fiberLinkTasks is not null, fiberStyleResult is not null
-       * 2. Download link source while processing style
-       * 3. Process style first, and then process link
-       */
-      fiberStyleResult!.then(() => {
-        fiberLinkTasks.push(() => Promise.resolve(app.onLoad(wrapElement)))
+    /**
+     * 1. If fiberStyleResult exist, fiberLinkTasks must exist
+     * 2. Download link source while processing style
+     * 3. Process style first, and then process link
+     */
+    if (fiberStyleResult) {
+      fiberStyleResult.then(() => {
+        fiberLinkTasks!.push(() => Promise.resolve(app.onLoad({ html: wrapElement })))
         serialExecFiberTasks(fiberLinkTasks)
       })
     } else {
-      app.onLoad(wrapElement)
+      app.onLoad({ html: wrapElement })
     }
   })
 }
