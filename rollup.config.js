@@ -3,7 +3,7 @@ import fse from 'fs-extra'
 import typescript from '@rollup/plugin-typescript'
 import resolve from '@rollup/plugin-node-resolve'
 import babel from '@rollup/plugin-babel'
-import { terser } from 'rollup-plugin-terser'
+import terser from '@rollup/plugin-terser'
 import replace from '@rollup/plugin-replace'
 const version = require('./package.json').version
 const cwd = process.cwd()
@@ -88,6 +88,7 @@ const cjsConfig = Object.assign({}, baseConfigForNormal, {
   plugins: baseConfigForNormal.plugins.concat([
     terser({
       ecma: 5,
+      safari10: true,
     }),
   ]),
 })

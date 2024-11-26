@@ -27,7 +27,8 @@ const testHref = () => {
 
   // vite环境下，通过window.microApp.location进行跳转
   // window.microApp.location.href = 'https://www.baidu.com/' // origin不同，直接跳转页面
-  window.microApp.location.href = '/micro-app/vite2/page2'
+  // window.microApp.location.href = '/micro-app/vite2/page2'
+  window.microApp.location.reload()
 }
 
 // parent.console.timeEnd('vite')

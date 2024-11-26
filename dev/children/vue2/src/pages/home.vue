@@ -1,9 +1,10 @@
 <template>
   <div>
-    <div class='logo-img'></div>
+    <div id="imageId" class='logo-img'></div>
     <!-- <div class='outer-img'></div>
     <img src="../assets/logo.png" alt=""> -->
     <h3>Vue@{{version}}</h3>
+    <a href="#imageId">测试a标签瞄点</a>
     <HelloWorld msg="Welcome to Your Vue.js App"/>
     <div class='msg-title'>{{microDataStr}}</div>
     <span class="iconfont">&#xe649;</span>
@@ -32,6 +33,12 @@
       </transition-group>
     </draggable>
     <button @click="testWindowOpen">测试window.open</button>
+    <!-- <micro-app-vue
+      name='test-react16'
+      url='http://localhost:3001/micro-app/react16/'
+      :data="data"
+      iframe
+    ></micro-app-vue> -->
   </div>
 </template>
 
@@ -55,7 +62,8 @@ export default {
         {people:'cn',id:2,name:'www.baidu.com'},
         {people:'cn',id:3,name:'www.taobao.com'},
         {people:'us',id:4,name:'www.google.com'}
-      ]
+      ],
+      data: {a: 1111}
     }
   },
   created () {

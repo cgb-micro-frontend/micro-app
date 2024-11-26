@@ -24,7 +24,7 @@ import {
   isFunction,
 } from './libs/utils'
 import { EventCenterForBaseApp } from './interact'
-import globalEnv, { initGlobalEnv } from './libs/global_env'
+import { initGlobalEnv } from './libs/global_env'
 import { appInstanceMap } from './create_app'
 import { lifeCycles } from './constants'
 import { router } from './sandbox/router'
@@ -167,7 +167,7 @@ export function unmountApp (appName: string, options?: unmountAppOptions): Promi
         }
       }
     } else {
-      logWarn(`app ${appName} does not exist`)
+      logWarn(`app ${appName} does not exist when unmountApp`)
       resolve(false)
     }
   })
@@ -197,7 +197,7 @@ export function reload (appName: string, destroy?: boolean): Promise<boolean> {
         resolve(false)
       }
     } else {
-      logWarn(`app ${appName} does not exist`)
+      logWarn(`app ${appName} does not exist when reload app`)
       resolve(false)
     }
   })
@@ -269,20 +269,6 @@ export function renderApp (options: RenderAppOptions): Promise<boolean> {
   })
 }
 
-/**
- * get app state
- * @param appName app.name
- * @returns app.state
- */
-export function getAppStatus (appName: string): string | void {
-  const app = appInstanceMap.get(formatAppName(appName))
-  if (app) {
-    return app.getLifeCycleState()
-  } else {
-    logWarn(`app ${appName} does not exist`)
-  }
-}
-
 export class MicroApp extends EventCenterForBaseApp implements MicroAppBaseType {
   tagName = 'micro-app'
   hasInit = false
@@ -295,7 +281,6 @@ export class MicroApp extends EventCenterForBaseApp implements MicroAppBaseType 
   getAllApps = getAllApps
   reload = reload
   renderApp = renderApp
-  getAppStatus = getAppStatus
   start (options?: OptionsType): void {
     if (!isBrowser || !window.customElements) {
       return logError('micro-app is not supported in this environment')
@@ -322,7 +307,7 @@ export class MicroApp extends EventCenterForBaseApp implements MicroAppBaseType 
 
     initGlobalEnv()
 
-    if (globalEnv.rawWindow.customElements.get(this.tagName)) {
+    if (window.customElements.get(this.tagName)) {
       return logWarn(`element ${this.tagName} is already defined`)
     }
 

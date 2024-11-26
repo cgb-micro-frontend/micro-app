@@ -1,6 +1,13 @@
 import type { lifeCyclesType, AppInterface } from '@micro-app/types'
 import microApp from '../micro_app'
-import { logError, isFunction, removeDomScope, getRootContainer, assign } from '../libs/utils'
+import {
+  logWarn,
+  isFunction,
+  removeDomScope,
+  getRootContainer,
+  assign,
+  formatEventType,
+} from '../libs/utils'
 
 function formatEventInfo (event: CustomEvent, element: HTMLElement): void {
   Object.defineProperties(event, {
@@ -28,13 +35,13 @@ type LifecycleEventName = keyof lifeCyclesType
  * @param error param from error hook
  */
 export default function dispatchLifecyclesEvent (
-  element: HTMLElement | ShadowRoot,
+  element: HTMLElement | ShadowRoot | null,
   appName: string,
   lifecycleName: LifecycleEventName,
   error?: Error,
 ): void {
   if (!element) {
-    return logError(`element does not exist in lifecycle ${lifecycleName}`, appName)
+    return logWarn(`element does not exist in lifecycle ${lifecycleName}`, appName)
   }
 
   element = getRootContainer(element)
@@ -56,7 +63,7 @@ export default function dispatchLifecyclesEvent (
   formatEventInfo(event, element)
   // global hooks
   if (isFunction(microApp.options.lifeCycles?.[lifecycleName])) {
-    microApp.options.lifeCycles![lifecycleName]!(event)
+    microApp.options.lifeCycles![lifecycleName]!(event, appName)
   }
 
   element.dispatchEvent(event)
@@ -65,7 +72,7 @@ export default function dispatchLifecyclesEvent (
 /**
  * Dispatch custom event to micro app
  * @param app app
- * @param eventName event name ['unmount', 'appstate-change']
+ * @param eventName event name ['mounted', 'unmount', 'appstate-change', 'statechange']
  * @param detail event detail
  */
 export function dispatchCustomEventToMicroApp (
@@ -73,7 +80,7 @@ export function dispatchCustomEventToMicroApp (
   eventName: string,
   detail: Record<string, any> = {},
 ): void {
-  const event = new CustomEvent(eventName, {
+  const event = new CustomEvent(formatEventType(eventName, app.name), {
     detail,
   })
 

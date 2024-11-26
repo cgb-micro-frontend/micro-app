@@ -10,6 +10,7 @@
         <el-menu-item index="/">home</el-menu-item>
         <el-menu-item index="/page2">page2</el-menu-item>
         <el-menu-item index="/table">table</el-menu-item>
+        <el-menu-item index="/nest">nest</el-menu-item>
       </el-menu>
     </div>
     <div @click="reload">点击刷新</div>

@@ -1,6 +1,6 @@
 {
   "name": "@micro-zoe/micro-app",
-  "version": "1.0.0-rc.4",
+  "version": "1.0.0-rc.15",
   "description": "A lightweight, efficient and powerful micro front-end framework",
   "private": false,
   "main": "lib/index.min.js",
@@ -96,6 +96,7 @@
     "@rollup/plugin-babel": "~5.2.2",
     "@rollup/plugin-node-resolve": "~11.0.1",
     "@rollup/plugin-replace": "~2.4.1",
+    "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "~8.1.0",
     "@types/jest": "~26.0.24",
     "@types/node": "~14.14.19",

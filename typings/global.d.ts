@@ -82,6 +82,8 @@ declare module '@micro-app/types' {
     staticEscapeProperties: PropertyKey[]
     // Variables that scoped in child app
     staticScopeProperties: PropertyKey[]
+    // clear mount, unmount when stop in default mode
+    clearHijackUmdHooks: () => void
   }
 
   interface WithSandBoxInterface extends BaseSandboxType {
@@ -104,7 +106,7 @@ declare module '@micro-app/types' {
     setPreRenderState (state: boolean): void
     markUmdMode(state: boolean): void
     patchStaticElement (container: Element | ShadowRoot): void
-    actionBeforeExecScripts (container: Element | ShadowRoot): void
+    actionsBeforeExecScripts (container: Element | ShadowRoot, handleUmdHooks: Func): void
     deleteIframeElement? (): void
     setStaticAppState (state: string): void
   }
@@ -169,7 +171,7 @@ declare module '@micro-app/types' {
   }
 
   // app instance
-  interface AppInterface extends Pick<ParentNode, 'querySelector' | 'querySelectorAll'> {
+  interface AppInterface extends Pick<Element, 'querySelector' | 'querySelectorAll'> {
     source: sourceType // source list
     // TODO: 去掉any
     sandBox: WithSandBoxInterface | null | any // sandbox
@@ -234,9 +236,6 @@ declare module '@micro-app/types' {
 
     // show app when connectedCallback with keep-alive
     showKeepAliveApp (container: HTMLElement | ShadowRoot): void
-
-    // get app lifecycle state
-    getLifeCycleState (): string
   }
 
   interface prefetchParam {
@@ -264,14 +263,14 @@ declare module '@micro-app/types' {
 
   // lifeCycles
   interface lifeCyclesType {
-    created?(e: CustomEvent): void
-    beforemount?(e: CustomEvent): void
-    mounted?(e: CustomEvent): void
-    unmount?(e: CustomEvent): void
-    error?(e: CustomEvent): void
-    beforeshow?(e: CustomEvent): void
-    aftershow?(e: CustomEvent): void
-    afterhidden?(e: CustomEvent): void
+    created?(e: CustomEvent, appName: string): void
+    beforemount?(e: CustomEvent, appName: string): void
+    mounted?(e: CustomEvent, appName: string): void
+    unmount?(e: CustomEvent, appName: string): void
+    error?(e: CustomEvent, appName: string): void
+    beforeshow?(e: CustomEvent, appName: string): void
+    aftershow?(e: CustomEvent, appName: string): void
+    afterhidden?(e: CustomEvent, appName: string): void
   }
 
   type AssetsChecker = (url: string) => boolean;
@@ -342,10 +341,10 @@ declare module '@micro-app/types' {
     'disable-memory-router'?: boolean
     'disable-patch-request'?: boolean
     'keep-router-state'?: boolean
-    'hidden-router'?: boolean
     'keep-alive'?: boolean
     'clear-data'?: boolean
     'router-mode'?: string
+    'router-event-delay'?: number | ((appName: string) => number),
     iframe?: boolean
     ssr?: boolean
     fiber?: boolean
@@ -362,6 +361,8 @@ declare module '@micro-app/types' {
     fetch?: fetchType
     globalAssets?: globalAssetsType,
     excludeAssetFilter?: (assetUrl: string) => boolean
+    /* image video audio 是否设置 crossOrigin = 'anonymous' */
+    includeCrossOrigin?: (assetUrl: string) => boolean
     getRootElementParentNode?: (node: Node, appName: AppName) => void
     customProxyDocumentProps?: Map<string | number | symbol, (value: unknown) => void>
   }
@@ -376,18 +377,25 @@ declare module '@micro-app/types' {
     start(options?: OptionsType): void
   }
 
-  interface MicroAppElementType {
+  interface MicroAppElementInterface {
     appName: AttrType // app name
     appUrl: AttrType // app url
-
     // Hooks for element append to documents
     connectedCallback (): void
-
     // Hooks for element delete from documents
     disconnectedCallback (): void
-
     // Hooks for element attributes change
     attributeChangedCallback (a: 'name' | 'url', o: string, n: string): void
+    // public mount action for micro_app_element & create_app
+    mount (app: AppInterface): void
+    // unmount app
+    unmount (destroy?: boolean, unmountcb?: CallableFunction): void
+    // Re render app from the command line
+    reload (destroy?: boolean): Promise<boolean>
+    // get delay time of router event
+    getRouterEventDelay (): number
+    // rewrite micro-app.setAttribute, process attr data
+    setAttribute (key: string, value: any): void
   }
 
   // special CallableFunction for interact
@@ -404,6 +412,11 @@ declare module '@micro-app/types' {
 
   type MicroHistory = ProxyHandler<History>
   type MicroState = any
+  interface MicroRouterInfoState {
+    fullPath: string | null,
+    state: MicroState,
+    mode: string,
+  }
   type HistoryProxyValue =
     Pick<
     History,
@@ -551,12 +564,6 @@ declare module '@micro-app/types' {
   type HandleMicroPathResult = {
     fullPath: string,
     isAttach2Hash: boolean,
-  }
-}
-
-declare namespace JSX {
-  interface IntrinsicElements {
-    'micro-app': any
   }
 }
 

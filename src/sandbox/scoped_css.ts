@@ -75,7 +75,7 @@ class CSSParser {
     // reset scopecssDisableNextLine
     this.scopecssDisableNextLine = false
 
-    if (!selectors) return parseError('selector missing', this.linkPath)
+    if (!selectors) return this.printError('selector missing', this.linkPath)
 
     this.recordResult(selectors)
 
@@ -92,9 +92,24 @@ class CSSParser {
     const m = this.commonMatch(/^[^{]+/, skip)
     if (!m) return false
 
+    /**
+     * NOTE:
+     *  1. :is(h1, h2, h3):has(+ h2, + h3, + h4) {}
+     *    should be ==> micro-app[name=xxx] :is(h1, h2, h3):has(+ h2, + h3, + h4) {}
+     *  2. :dir(ltr) {}
+     *    should be ==> micro-app[name=xxx] :dir(ltr) {}
+     *  3. body :not(div, .fancy) {}
+     *    should be ==> micro-app[name=xxx] micro-app-body :not(div, .fancy) {}
+     *  4. .a, .b, li:nth-child(3)
+     *    should be ==> micro-app[name=xxx] .a, micro-app[name=xxx] .b, micro-app[name=xxx] li:nth-child(3)
+     *  5. :is(.a, .b, .c) a {}
+     *    should be ==> micro-app[name=xxx] :is(.a, .b, .c) a {}
+     *  6. :where(.a, .b, .c) a {}
+     *    should be ==> micro-app[name=xxx] :where(.a, .b, .c) a {}
+     */
     return m[0].replace(/(^|,[\n\s]*)([^,]+)/g, (_, separator, selector) => {
       selector = trim(selector)
-      if (!(
+      if (selector && !(
         this.scopecssDisableNextLine ||
         (
           this.scopecssDisable && (
@@ -117,16 +132,16 @@ class CSSParser {
 
   // https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleDeclaration
   private styleDeclarations (): boolean | void {
-    if (!this.matchOpenBrace()) return parseError("Declaration missing '{'", this.linkPath)
+    if (!this.matchOpenBrace()) return this.printError("Declaration missing '{'", this.linkPath)
 
     this.matchAllDeclarations()
 
-    if (!this.matchCloseBrace()) return parseError("Declaration missing '}'", this.linkPath)
+    if (!this.matchCloseBrace()) return this.printError("Declaration missing '}'", this.linkPath)
 
     return true
   }
 
-  private matchAllDeclarations (nesting = 1): void {
+  private matchAllDeclarations (nesting = 0): void {
     let cssValue = (this.commonMatch(/^(?:url\(["']?(?:[^)"'}]+)["']?\)|[^{}/])*/, true) as RegExpExecArray)[0]
 
     if (cssValue) {
@@ -154,15 +169,7 @@ class CSSParser {
     // reset scopecssDisableNextLine
     this.scopecssDisableNextLine = false
 
-    if (!this.cssText) return
-
-    if (this.cssText.charAt(0) === '}') {
-      if (!nesting) return
-      if (nesting > 1) {
-        this.commonMatch(/}+/)
-      }
-      return this.matchAllDeclarations(nesting - 1)
-    }
+    if (!this.cssText.length) return
 
     // extract comments in declarations
     if (this.cssText.charAt(0) === '/') {
@@ -171,11 +178,13 @@ class CSSParser {
       } else {
         this.commonMatch(/\/+/)
       }
-    }
-
-    if (this.cssText.charAt(0) === '{') {
-      this.commonMatch(/{+\s*/)
+    } else if (this.cssText.charAt(0) === '{') {
+      this.matchOpenBrace()
       nesting++
+    } else if (this.cssText.charAt(0) === '}') {
+      if (nesting < 1) return
+      this.matchCloseBrace()
+      nesting--
     }
 
     return this.matchAllDeclarations(nesting)
@@ -196,7 +205,8 @@ class CSSParser {
       this.documentRule() ||
       this.pageRule() ||
       this.hostRule() ||
-      this.fontFaceRule()
+      this.fontFaceRule() ||
+      this.layerRule()
   }
 
   // :global is CSS Modules rule, it will be converted to normal syntax
@@ -212,18 +222,18 @@ class CSSParser {
   private keyframesRule (): boolean | void {
     if (!this.commonMatch(/^@([-\w]+)?keyframes\s*/)) return false
 
-    if (!this.commonMatch(/^[^{]+/)) return parseError('@keyframes missing name', this.linkPath)
+    if (!this.commonMatch(/^[^{]+/)) return this.printError('@keyframes missing name', this.linkPath)
 
     this.matchComments()
 
-    if (!this.matchOpenBrace()) return parseError("@keyframes missing '{'", this.linkPath)
+    if (!this.matchOpenBrace()) return this.printError("@keyframes missing '{'", this.linkPath)
 
     this.matchComments()
     while (this.keyframeRule()) {
       this.matchComments()
     }
 
-    if (!this.matchCloseBrace()) return parseError("@keyframes missing '}'", this.linkPath)
+    if (!this.matchCloseBrace()) return this.printError("@keyframes missing '}'", this.linkPath)
 
     this.matchLeadingSpaces()
 
@@ -275,6 +285,23 @@ class CSSParser {
     return this.commonHandlerForAtRuleWithSelfRule('font-face')
   }
 
+  // https://developer.mozilla.org/en-US/docs/Web/CSS/@layer
+  private layerRule (): boolean | void {
+    if (!this.commonMatch(/^@layer\s*([^{;]+)/)) return false
+
+    if (!this.matchOpenBrace()) return !!this.commonMatch(/^[;]+/)
+
+    this.matchComments()
+
+    this.matchRules()
+
+    if (!this.matchCloseBrace()) return this.printError('@layer missing \'}\'', this.linkPath)
+
+    this.matchLeadingSpaces()
+
+    return true
+  }
+
   // https://developer.mozilla.org/en-US/docs/Web/API/CSSMediaRule
   private mediaRule = this.createMatcherForRuleWithChildRule(/^@media *([^{]+)/, '@media')
   // https://developer.mozilla.org/en-US/docs/Web/API/CSSSupportsRule
@@ -297,13 +324,13 @@ class CSSParser {
     return () => {
       if (!this.commonMatch(reg)) return false
 
-      if (!this.matchOpenBrace()) return parseError(`${name} missing '{'`, this.linkPath)
+      if (!this.matchOpenBrace()) return this.printError(`${name} missing '{'`, this.linkPath)
 
       this.matchComments()
 
       this.matchRules()
 
-      if (!this.matchCloseBrace()) return parseError(`${name} missing '}'`, this.linkPath)
+      if (!this.matchCloseBrace()) return this.printError(`${name} missing '}'`, this.linkPath)
 
       this.matchLeadingSpaces()
 
@@ -323,11 +350,11 @@ class CSSParser {
 
   // common handler for @font-face, @page
   private commonHandlerForAtRuleWithSelfRule (name: string): boolean | void {
-    if (!this.matchOpenBrace()) return parseError(`@${name} missing '{'`, this.linkPath)
+    if (!this.matchOpenBrace()) return this.printError(`@${name} missing '{'`, this.linkPath)
 
     this.matchAllDeclarations()
 
-    if (!this.matchCloseBrace()) return parseError(`@${name} missing '}'`, this.linkPath)
+    if (!this.matchCloseBrace()) return this.printError(`@${name} missing '}'`, this.linkPath)
 
     this.matchLeadingSpaces()
 
@@ -350,7 +377,7 @@ class CSSParser {
     i += 2
 
     if (this.cssText.charAt(i - 1) === '') {
-      return parseError('End of comment missing', this.linkPath)
+      return this.printError('End of comment missing', this.linkPath)
     }
 
     // get comment content
@@ -399,7 +426,7 @@ class CSSParser {
   }
 
   private matchCloseBrace () {
-    return this.commonMatch(/^}/)
+    return this.commonMatch(/^}\s*/)
   }
 
   // match and slice the leading spaces
@@ -414,6 +441,12 @@ class CSSParser {
       this.result += encodeURIComponent(strFragment)
     } else {
       this.result += strFragment
+    }
+  }
+
+  private printError (msg: string, linkPath?: string): void {
+    if (this.cssText.length) {
+      parseError(msg, linkPath)
     }
   }
 }

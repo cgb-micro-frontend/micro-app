@@ -7,6 +7,7 @@ import type {
   AttrsType,
   fiberTasks,
   MicroAppElementTagNameMap,
+  MicroAppElementInterface,
 } from '@micro-app/types'
 
 export const version = '__MICRO_APP_VERSION__'
@@ -25,7 +26,7 @@ export const globalThis = (typeof global !== 'undefined')
       )
   )
 
-export const noop = () => {}
+export const noop = () => { }
 export const noopFalse = () => false
 
 // Array.isArray
@@ -42,57 +43,57 @@ export const rawHasOwnProperty = Object.prototype.hasOwnProperty
 export const toTypeString = (value: unknown): string => rawToString.call(value)
 
 // is Undefined
-export function isUndefined (target: unknown): target is undefined {
+export function isUndefined(target: unknown): target is undefined {
   return target === undefined
 }
 
 // is Null
-export function isNull (target: unknown): target is null {
+export function isNull(target: unknown): target is null {
   return target === null
 }
 
 // is String
-export function isString (target: unknown): target is string {
+export function isString(target: unknown): target is string {
   return typeof target === 'string'
 }
 
 // is Boolean
-export function isBoolean (target: unknown): target is boolean {
+export function isBoolean(target: unknown): target is boolean {
   return typeof target === 'boolean'
 }
 
 // is Number
-export function isNumber (target: unknown): target is Number {
+export function isNumber(target: unknown): target is Number {
   return typeof target === 'number'
 }
 
 // is function
-export function isFunction (target: unknown): target is Function {
+export function isFunction(target: unknown): target is Function {
   return typeof target === 'function'
 }
 
 // is PlainObject
-export function isPlainObject <T = Record<PropertyKey, unknown>> (target: unknown): target is T {
+export function isPlainObject<T = Record<PropertyKey, unknown>>(target: unknown): target is T {
   return toTypeString(target) === '[object Object]'
 }
 
 // is Object
-export function isObject (target: unknown): target is Object {
+export function isObject(target: unknown): target is Object {
   return !isNull(target) && typeof target === 'object'
 }
 
 // is Promise
-export function isPromise (target: unknown): target is Promise<unknown> {
+export function isPromise(target: unknown): target is Promise<unknown> {
   return toTypeString(target) === '[object Promise]'
 }
 
 // is bind function
-export function isBoundFunction (target: unknown): boolean {
-  return isFunction(target) && target.name.indexOf('bound ') === 0 && !target.hasOwnProperty('prototype')
+export function isBoundFunction(target: unknown): boolean {
+  return isFunction(target) && target.name?.indexOf('bound ') === 0 && !target.hasOwnProperty('prototype')
 }
 
 // is constructor function
-export function isConstructor (target: unknown): boolean {
+export function isConstructor(target: unknown): boolean {
   if (isFunction(target)) {
     const targetStr = target.toString()
     return (
@@ -106,62 +107,107 @@ export function isConstructor (target: unknown): boolean {
 }
 
 // is ShadowRoot
-export function isShadowRoot (target: unknown): target is ShadowRoot {
+export function isShadowRoot(target: unknown): target is ShadowRoot {
   return typeof ShadowRoot !== 'undefined' && target instanceof ShadowRoot
 }
 
-export function isURL (target: unknown): target is URL {
+export function isURL(target: unknown): target is URL {
   return target instanceof URL || !!(target as URL)?.href
 }
 
 // iframe element not instanceof base app Element, use tagName instead
-export function isElement (target: unknown): target is Element {
+export function isElement(target: unknown): target is Element {
   return target instanceof Element || isString((target as Element)?.tagName)
 }
 
 // iframe node not instanceof base app Node, use nodeType instead
-export function isNode (target: unknown): target is Node {
+export function isNode(target: unknown): target is Node {
   return target instanceof Node || isNumber((target as Node)?.nodeType)
 }
 
-export function isLinkElement (target: unknown): target is HTMLLinkElement {
+export function isCanvasElement(target: unknown): target is HTMLCanvasElement {
+  return toTypeString(target) === '[object HTMLCanvasElement]'
+}
+
+export function isAnchorElement(target: unknown): target is HTMLAnchorElement {
+  return toTypeString(target) === '[object HTMLAnchorElement]'
+}
+
+export function isAudioElement(target: unknown): target is HTMLAudioElement {
+  return toTypeString(target) === '[object HTMLAudioElement]'
+}
+
+export function isVideoElement(target: unknown): target is HTMLVideoElement {
+  return toTypeString(target) === '[object HTMLVideoElement]'
+}
+
+export function isLinkElement(target: unknown): target is HTMLLinkElement {
   return toTypeString(target) === '[object HTMLLinkElement]'
 }
 
-export function isStyleElement (target: unknown): target is HTMLStyleElement {
+export function isStyleElement(target: unknown): target is HTMLStyleElement {
   return toTypeString(target) === '[object HTMLStyleElement]'
 }
 
-export function isScriptElement (target: unknown): target is HTMLScriptElement {
+export function isScriptElement(target: unknown): target is HTMLScriptElement {
   return toTypeString(target) === '[object HTMLScriptElement]'
 }
 
-export function isIFrameElement (target: unknown): target is HTMLIFrameElement {
+export function isIFrameElement(target: unknown): target is HTMLIFrameElement {
   return toTypeString(target) === '[object HTMLIFrameElement]'
 }
 
-export function isDivElement (target: unknown): target is HTMLDivElement {
+export function isDivElement(target: unknown): target is HTMLDivElement {
   return toTypeString(target) === '[object HTMLDivElement]'
 }
 
-export function isImageElement (target: unknown): target is HTMLImageElement {
+export function isImageElement(target: unknown): target is HTMLImageElement {
   return toTypeString(target) === '[object HTMLImageElement]'
 }
 
-export function isBaseElement (target: unknown): target is HTMLBaseElement {
+export function isBaseElement(target: unknown): target is HTMLBaseElement {
   return toTypeString(target) === '[object HTMLBaseElement]'
 }
 
-export function isMicroAppBody (target: unknown): target is HTMLElement {
+export function isDocumentFragment(target: unknown): target is DocumentFragment {
+  return toTypeString(target) === '[object DocumentFragment]'
+}
+
+export function isDocumentShadowRoot(target: unknown): target is DocumentFragment {
+  return toTypeString(target) === '[object ShadowRoot]'
+}
+
+export function isMicroAppBody(target: unknown): target is HTMLElement {
   return isElement(target) && target.tagName.toUpperCase() === 'MICRO-APP-BODY'
 }
 
+export function isMicroAppHead(target: unknown): target is HTMLElement {
+  return isElement(target) && target.tagName.toUpperCase() === 'MICRO-APP-HEAD'
+}
+
+export function isWebComponentElement(target: unknown): boolean {
+  let result = toTypeString(target) === '[object HTMLElement]'
+  if (result) {
+    const tagName = (target as HTMLElement).tagName.toUpperCase()
+    result = result && !tagName.startsWith('MICRO-APP')
+  }
+  return result
+}
+
 // is ProxyDocument
-export function isProxyDocument (target: unknown): target is Document {
+export function isProxyDocument(target: unknown): target is Document {
   return toTypeString(target) === '[object ProxyDocument]'
 }
 
-export function includes (target: unknown[], searchElement: unknown, fromIndex?: number): boolean {
+export function isTargetExtension(path: string, suffix: string): boolean {
+  try {
+    return createURL(path).pathname.split('.').pop() === suffix
+  } catch {
+    return false
+  }
+}
+
+export function includes(target: unknown[], searchElement: unknown, fromIndex?: number): boolean {
   if (target == null) {
     throw new TypeError('includes target is null or undefined')
   }
@@ -187,7 +233,7 @@ export function includes (target: unknown[], searchElement: unknown, fromIndex?:
  * @param msg message
  * @param appName app name, default is null
  */
-export function logError (
+export function logError(
   msg: unknown,
   appName: string | null = null,
   ...rest: unknown[]
@@ -205,7 +251,7 @@ export function logError (
  * @param msg message
  * @param appName app name, default is null
  */
-export function logWarn (
+export function logWarn(
   msg: unknown,
   appName: string | null = null,
   ...rest: unknown[]
@@ -223,15 +269,24 @@ export function logWarn (
  * @param fn callback
  * @param args params
  */
-export function defer (fn: Func, ...args: unknown[]): void {
+export function defer(fn: Func, ...args: unknown[]): void {
   Promise.resolve().then(fn.bind(null, ...args))
+}
+
+/**
+ * async execution with macro task
+ * @param fn callback
+ * @param args params
+ */
+export function macro(fn: Func, delay = 0, ...args: unknown[]): void {
+  setTimeout(fn.bind(null, ...args), delay)
 }
 
 /**
  * create URL as MicroLocation
  */
 export const createURL = (function (): (path: string | URL, base?: string) => MicroLocation {
-  class Location extends URL {}
+  class Location extends URL { }
   return (path: string | URL, base?: string): MicroLocation => {
     return (base ? new Location('' + path, base) : new Location('' + path)) as MicroLocation
   }
@@ -241,7 +296,7 @@ export const createURL = (function (): (path: string | URL, base?: string) => Mi
  * Add address protocol
  * @param url address
  */
-export function addProtocol (url: string): string {
+export function addProtocol(url: string): string {
   return url.startsWith('//') ? `${globalThis.location.protocol}${url}` : url
 }
 
@@ -251,7 +306,7 @@ export function addProtocol (url: string): string {
  * 1. micro-app -> attributeChangedCallback
  * 2. preFetch
  */
-export function formatAppURL (url: string | null, appName: string | null = null): string {
+export function formatAppURL(url: string | null, appName: string | null = null): string {
   if (!isString(url) || !url) return ''
 
   try {
@@ -278,7 +333,7 @@ export function formatAppURL (url: string | null, appName: string | null = null)
  * 5. plugins
  * 6. router api (push, replace)
  */
-export function formatAppName (name: string | null): string {
+export function formatAppName(name: string | null): string {
   if (!isString(name) || !name) return ''
   return name.replace(/(^\d+)|([^\w\d-_])/gi, '')
 }
@@ -289,11 +344,10 @@ export function formatAppName (name: string | null): string {
  *  2. https://domain/xx to https://domain/xx/
  * @param url app.url
  */
-export function getEffectivePath (url: string): string {
+export function getEffectivePath(url: string): string {
   const { origin, pathname } = createURL(url)
   if (/\.(\w+)$/.test(pathname)) {
-    const fullPath = `${origin}${pathname}`
-    const pathArr = fullPath.split('/')
+    const pathArr = `${origin}${pathname}`.split('/')
     pathArr.pop()
     return pathArr.join('/') + '/'
   }
@@ -306,7 +360,7 @@ export function getEffectivePath (url: string): string {
  * @param path address
  * @param baseURI base url(app.url)
  */
-export function CompletionPath (path: string, baseURI: string): string {
+export function CompletionPath(path: string, baseURI: string): string {
   if (
     !path ||
     /^((((ht|f)tps?)|file):)?\/\//.test(path) ||
@@ -321,7 +375,7 @@ export function CompletionPath (path: string, baseURI: string): string {
  * which is used to complete the relative address in the css
  * @param linkPath full link address
  */
-export function getLinkFileDir (linkPath: string): string {
+export function getLinkFileDir(linkPath: string): string {
   const pathArr = linkPath.split('/')
   pathArr.pop()
   return addProtocol(pathArr.join('/') + '/')
@@ -334,7 +388,7 @@ export function getLinkFileDir (linkPath: string): string {
  * @param errorCb failed callback
  * @param finallyCb finally callback
  */
-export function promiseStream <T> (
+export function promiseStream<T>(
   promiseList: Array<Promise<T> | T>,
   successCb: CallableFunction,
   errorCb: CallableFunction,
@@ -342,7 +396,7 @@ export function promiseStream <T> (
 ): void {
   let finishedNum = 0
 
-  function isFinished () {
+  function isFinished() {
     if (++finishedNum === promiseList.length && finallyCb) finallyCb()
   }
 
@@ -363,18 +417,18 @@ export function promiseStream <T> (
 }
 
 // Check whether the browser supports module script
-export function isSupportModuleScript (): boolean {
+export function isSupportModuleScript(): boolean {
   const s = document.createElement('script')
   return 'noModule' in s
 }
 
 // Create a random symbol string
-export function createNonceSrc (): string {
+export function createNonceSrc(): string {
   return 'inline-' + Math.random().toString(36).substr(2, 15)
 }
 
 // Array deduplication
-export function unique (array: any[]): any[] {
+export function unique(array: any[]): any[] {
   return array.filter(function (this: Record<PropertyKey, boolean>, item) {
     return item in this ? false : (this[item] = true)
   }, Object.create(null))
@@ -387,7 +441,7 @@ export const requestIdleCallback = globalThis.requestIdleCallback ||
     return setTimeout(function () {
       fn({
         didTimeout: false,
-        timeRemaining () {
+        timeRemaining() {
           return Math.max(0, 50 - (Date.now() - lastTime))
         },
       })
@@ -398,7 +452,7 @@ export const requestIdleCallback = globalThis.requestIdleCallback ||
  * Wrap requestIdleCallback with promise
  * Exec callback when browser idle
  */
-export function promiseRequestIdle (callback: CallableFunction): Promise<void> {
+export function promiseRequestIdle(callback: CallableFunction): Promise<void> {
   return new Promise((resolve) => {
     requestIdleCallback(() => {
       callback(resolve)
@@ -409,30 +463,18 @@ export function promiseRequestIdle (callback: CallableFunction): Promise<void> {
 /**
  * Record the currently running app.name
  */
-let currentMicroAppName: string | null = null
-export function setCurrentAppName (appName: string | null): void {
-  currentMicroAppName = appName
+let currentAppName: string | null = null
+export function setCurrentAppName(appName: string | null): void {
+  currentAppName = appName
 }
 
 // get the currently running app.name
-export function getCurrentAppName (): string | null {
-  return currentMicroAppName
+export function getCurrentAppName(): string | null {
+  return currentAppName
 }
 
-// Clear appName
-let preventSetAppName = false
-export function removeDomScope (force?: boolean): void {
-  setCurrentAppName(null)
-  if (force && !preventSetAppName) {
-    preventSetAppName = true
-    defer(() => {
-      preventSetAppName = false
-    })
-  }
-}
-
-export function throttleDeferForSetAppName (appName: string) {
-  if (currentMicroAppName !== appName && !preventSetAppName) {
+export function throttleDeferForSetAppName(appName: string): void {
+  if (currentAppName !== appName && !getPreventSetState()) {
     setCurrentAppName(appName)
     defer(() => {
       setCurrentAppName(null)
@@ -440,15 +482,62 @@ export function throttleDeferForSetAppName (appName: string) {
   }
 }
 
+// only for iframe document.body(head).querySelector(querySelectorAll)
+let iframeCurrentAppName: string | null = null
+export function setIframeCurrentAppName(appName: string | null) {
+  iframeCurrentAppName = appName
+}
+
+export function getIframeCurrentAppName(): string | null {
+  return iframeCurrentAppName
+}
+
+export function throttleDeferForIframeAppName(appName: string): void {
+  if (iframeCurrentAppName !== appName && !getPreventSetState()) {
+    setIframeCurrentAppName(appName)
+    defer(() => {
+      setIframeCurrentAppName(null)
+    })
+  }
+}
+
+// prevent set app name
+let preventSetState = false
+export function getPreventSetState(): boolean {
+  return preventSetState
+}
+
+/**
+ * prevent set appName
+ * usage:
+ * removeDomScope(true)
+ * -----> element scope point to base app <-----
+ * removeDomScope(false)
+ */
+export function removeDomScope(force?: boolean): void {
+  if (force !== false) {
+    setCurrentAppName(null)
+    setIframeCurrentAppName(null)
+    if (force && !preventSetState) {
+      preventSetState = true
+      defer(() => {
+        preventSetState = false
+      })
+    }
+  } else {
+    preventSetState = false
+  }
+}
+
 // is safari browser
-export function isSafari (): boolean {
+export function isSafari(): boolean {
   return /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
 }
 
 /**
  * Create pure elements
  */
-export function pureCreateElement<K extends keyof MicroAppElementTagNameMap> (tagName: K, options?: ElementCreationOptions): MicroAppElementTagNameMap[K] {
+export function pureCreateElement<K extends keyof MicroAppElementTagNameMap>(tagName: K, options?: ElementCreationOptions): MicroAppElementTagNameMap[K] {
   const element = (window.rawDocument || document).createElement(tagName, options)
   if (element.__MICRO_APP_NAME__) delete element.__MICRO_APP_NAME__
   element.__PURE_ELEMENT__ = true
@@ -456,13 +545,13 @@ export function pureCreateElement<K extends keyof MicroAppElementTagNameMap> (ta
 }
 
 // is invalid key of querySelector
-export function isInvalidQuerySelectorKey (key: string): boolean {
+export function isInvalidQuerySelectorKey(key: string): boolean {
   if (__TEST__) return !key || /(^\d)|([^\w\d-_$])/gi.test(key)
   return !key || /(^\d)|([^\w\d-_\u4e00-\u9fa5])/gi.test(key)
 }
 
 // unique element
-export function isUniqueElement (key: string): boolean {
+export function isUniqueElement(key: string): boolean {
   return (
     /^body$/i.test(key) ||
     /^head$/i.test(key) ||
@@ -472,22 +561,23 @@ export function isUniqueElement (key: string): boolean {
   )
 }
 
+export type RootContainer = HTMLElement & MicroAppElementInterface
 /**
  * get micro-app element
  * @param target app container
  */
-export function getRootContainer (target: HTMLElement | ShadowRoot): HTMLElement {
-  return (isShadowRoot(target) ? (target as ShadowRoot).host : target) as HTMLElement
+export function getRootContainer(target: HTMLElement | ShadowRoot): RootContainer {
+  return (isShadowRoot(target) ? (target as ShadowRoot).host : target) as RootContainer
 }
 
 /**
  * trim start & end
  */
-export function trim (str: string): string {
+export function trim(str: string): string {
   return str ? str.replace(/^\s+|\s+$/g, '') : ''
 }
 
-export function isFireFox (): boolean {
+export function isFireFox(): boolean {
   return navigator.userAgent.indexOf('Firefox') > -1
 }
 
@@ -496,7 +586,7 @@ export function isFireFox (): boolean {
  * @param search - search string to parse
  * @returns a query object
  */
-export function parseQuery (search: string): LocationQueryObject {
+export function parseQuery(search: string): LocationQueryObject {
   const result: LocationQueryObject = {}
   const queryList = search.split('&')
 
@@ -525,7 +615,7 @@ export function parseQuery (search: string): LocationQueryObject {
  * @param queryObject - query object to stringify
  * @returns query string without the leading `?`
  */
-export function stringifyQuery (queryObject: LocationQueryObject): string {
+export function stringifyQuery(queryObject: LocationQueryObject): string {
   let result = ''
 
   for (const key in queryObject) {
@@ -550,10 +640,10 @@ export function stringifyQuery (queryObject: LocationQueryObject): string {
 /**
  * Register or unregister callback/guard with Set
  */
-export function useSetRecord<T> () {
+export function useSetRecord<T>() {
   const handlers: Set<T> = new Set()
 
-  function add (handler: T): () => boolean {
+  function add(handler: T): () => boolean {
     handlers.add(handler)
     return (): boolean => {
       if (handlers.has(handler)) return handlers.delete(handler)
@@ -570,10 +660,10 @@ export function useSetRecord<T> () {
 /**
  * record data with Map
  */
-export function useMapRecord<T> () {
+export function useMapRecord<T>() {
   const data: Map<PropertyKey, T> = new Map()
 
-  function add (key: PropertyKey, value: T): () => boolean {
+  function add(key: PropertyKey, value: T): () => boolean {
     data.set(key, value)
     return (): boolean => {
       if (data.has(key)) return data.delete(key)
@@ -591,7 +681,7 @@ export function useMapRecord<T> () {
   }
 }
 
-export function getAttributes (element: Element): AttrsType {
+export function getAttributes(element: Element): AttrsType {
   const attr = element.attributes
   const attrMap: AttrsType = new Map()
   for (let i = 0; i < attr.length; i++) {
@@ -606,7 +696,7 @@ export function getAttributes (element: Element): AttrsType {
  * @param fiberTasks fiber task list
  * @param callback action callback
  */
-export function injectFiberTask (fiberTasks: fiberTasks, callback: CallableFunction): void {
+export function injectFiberTask(fiberTasks: fiberTasks, callback: CallableFunction): void {
   if (fiberTasks) {
     fiberTasks.push(() => promiseRequestIdle((resolve: PromiseConstructor['resolve']) => {
       callback()
@@ -621,7 +711,7 @@ export function injectFiberTask (fiberTasks: fiberTasks, callback: CallableFunct
  * serial exec fiber task of link, style, script
  * @param tasks task array or null
  */
-export function serialExecFiberTasks (tasks: fiberTasks): Promise<void> | null {
+export function serialExecFiberTasks(tasks: fiberTasks): Promise<void> | null {
   return tasks?.reduce((pre, next) => pre.then(next), Promise.resolve()) || null
 }
 
@@ -629,7 +719,7 @@ export function serialExecFiberTasks (tasks: fiberTasks): Promise<void> | null {
  * inline script start with inline-xxx
  * @param address source address
  */
-export function isInlineScript (address: string): boolean {
+export function isInlineScript(address: string): boolean {
   return address.startsWith('inline-')
 }
 
@@ -639,7 +729,7 @@ export function isInlineScript (address: string): boolean {
  * @param appName app.name
  * @param args arguments
  */
-export function execMicroAppGlobalHook (
+export function execMicroAppGlobalHook(
   fn: Func | null,
   appName: string,
   hookName: string,
@@ -656,21 +746,47 @@ export function execMicroAppGlobalHook (
  * remove all childNode from target node
  * @param $dom target node
  */
-export function clearDOM ($dom: HTMLElement | ShadowRoot | Document): void {
+export function clearDOM($dom: HTMLElement | ShadowRoot | Document): void {
   while ($dom?.firstChild) {
     $dom.removeChild($dom.firstChild)
   }
 }
 
-type BaseHTMLElementType = HTMLElement & {
-  new (): HTMLElement;
-  prototype: HTMLElement;
+export function instanceOf<T extends new (...args: unknown[]) => unknown>(
+  instance: unknown,
+  constructor: T,
+): instance is T extends new (...args: unknown[]) => infer R ? R : boolean {
+  if (instance === null || instance === undefined) {
+    return false
+  } else if (!isFunction(constructor)) {
+    throw new TypeError("Right-hand side of 'instanceof' is not callable")
+  }
+  let proto = Object.getPrototypeOf(instance)
+  while (proto) {
+    if (proto === constructor.prototype) {
+      return true
+    }
+    proto = Object.getPrototypeOf(proto)
+  }
+  return false
 }
 
 /**
- * get HTMLElement from base app
- * @returns HTMLElement
+ * Format event name
+ * In with sandbox, child event and lifeCycles bind to microAppElement, there are two events with same name - mounted unmount, it should be handled specifically to prevent conflicts
+ * Issue: https://github.com/micro-zoe/micro-app/issues/1161
+ * @param type event name
+ * @param appName app name
  */
-export function getBaseHTMLElement (): BaseHTMLElementType {
-  return (window.rawWindow?.HTMLElement || window.HTMLElement) as BaseHTMLElementType
+const formatEventList = ['mounted', 'unmount']
+export function formatEventType(type: string, appName: string): string {
+  return formatEventList.includes(type) ? `${type}-${appName}` : type
+}
+
+/**
+ * Is the object empty
+ * target maybe number, string, array ...
+ */
+export function isEmptyObject(target: unknown): boolean {
+  return isPlainObject(target) ? !Object.keys(target).length : true
 }

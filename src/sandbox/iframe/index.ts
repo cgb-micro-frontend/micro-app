@@ -1,4 +1,5 @@
 import type {
+  Func,
   microAppWindowType,
   MicroLocation,
   SandBoxStartParams,
@@ -19,6 +20,8 @@ import {
   isArray,
   defer,
   createURL,
+  rawDefineProperties,
+  isFunction,
 } from '../../libs/utils'
 import {
   EventCenterForMicroApp,
@@ -65,8 +68,6 @@ export default class IframeSandbox {
   private removeHistoryListener!: CallableFunction
   // Properties that can be escape to rawWindow
   public escapeProperties: PropertyKey[] = []
-  // Properties escape to rawWindow, cleared when unmount
-  public escapeKeys = new Set<PropertyKey>()
   public deleteIframeElement: () => void
   public iframe!: HTMLIFrameElement | null
   // Promise used to mark whether the sandbox is initialized
@@ -80,6 +81,8 @@ export default class IframeSandbox {
   // TODO: 放到 super中定义，super(appName, url)，with沙箱也需要简化
   public appName: string
   public url: string
+  // reset mount, unmount when stop in default mode
+  public clearHijackUmdHooks!: () => void
 
   constructor (appName: string, url: string) {
     this.appName = appName
@@ -127,9 +130,10 @@ export default class IframeSandbox {
     this.iframe = pureCreateElement('iframe')
 
     const iframeAttrs: Record<string, string> = {
+      id: appName,
       src: microApp.options.iframeSrc || browserPath,
       style: 'display: none',
-      id: appName,
+      'powered-by': 'micro-app',
     }
 
     Object.keys(iframeAttrs).forEach((key) => this.iframe!.setAttribute(key, iframeAttrs[key]))
@@ -169,15 +173,6 @@ export default class IframeSandbox {
      *  1. iframe router and browser router are separated, we should update iframe router manually
      *  2. withSandbox location is browser location when disable memory-router, so no need to do anything
      */
-    /**
-     * TODO:
-     * 1. iframe关闭虚拟路由系统后，default-page无法使用，推荐用户直接使用浏览器地址控制首页渲染
-     *    补充：keep-router-state 也无法配置，因为keep-router-state一定为true。
-     * 2. 导航拦截、current.route 可以正常使用
-     * 3. 可以正常控制子应用跳转，方式还是自上而下(也可以是子应用内部跳转，这种方式更好一点，减小对基座的影响，不会导致vue的循环刷新)
-     * 4. 关闭虚拟路由以后会对应 route-mode='custom' 模式，包括with沙箱也会这么做
-     * 5. 关闭虚拟路由是指尽可能模拟没有虚拟路由的情况，子应用直接获取浏览器location和history，控制浏览器跳转
-     */
     this.initRouteState(defaultPage)
 
     // unique listener of popstate event for child app
@@ -214,7 +209,9 @@ export default class IframeSandbox {
     destroy,
     clearData,
   }: SandBoxStopParams): void {
+    // sandbox.stop may exec before sandbox.start, e.g: iframe sandbox + default mode + remount
     if (!this.active) return
+
     this.recordAndReleaseEffect({ clearData }, !umdMode || destroy)
 
     /* --- memory router part --- start */
@@ -228,10 +225,7 @@ export default class IframeSandbox {
     if (!umdMode || destroy) {
       this.deleteIframeElement()
 
-      this.escapeKeys.forEach((key: PropertyKey) => {
-        Reflect.deleteProperty(globalEnv.rawWindow, key)
-      })
-      this.escapeKeys.clear()
+      this.clearHijackUmdHooks()
     }
 
     if (--globalEnv.activeSandbox === 0) {
@@ -240,7 +234,7 @@ export default class IframeSandbox {
     }
 
     if (--IframeSandbox.activeCount === 0) {
-      // TODO: Is there anything to put here?
+      // TODO: Is there anything to do?
     }
 
     this.active = false
@@ -422,7 +416,7 @@ export default class IframeSandbox {
     this.microHead.appendChild(this.baseElement)
   }
 
-  // 初始化和每次跳转时都要更新base的href
+  // Update the base.href when initial and each redirect
   public updateIframeBase = (): void => {
     // origin must be child app origin
     this.baseElement?.setAttribute('href', createURL(this.url).origin + this.proxyLocation.pathname)
@@ -492,10 +486,55 @@ export default class IframeSandbox {
    * action before exec scripts when mount
    * Actions:
    * 1. patch static elements from html
+   * 2. hijack umd hooks -- mount, unmount, micro-app-appName
    * @param container micro app container
    */
-  public actionBeforeExecScripts (container: Element | ShadowRoot): void {
+  public actionsBeforeExecScripts (container: Element | ShadowRoot, handleUmdHooks: Func): void {
     this.patchStaticElement(container)
+    this.clearHijackUmdHooks = this.hijackUmdHooks(this.appName, this.microAppWindow, handleUmdHooks)
+  }
+
+  // hijack mount, unmount, micro-app-appName hook to microAppWindow
+  private hijackUmdHooks (
+    appName: string,
+    microAppWindow: microAppWindowType,
+    handleUmdHooks: Func,
+  ): () => void {
+    let mount: Func | null, unmount: Func | null, microAppLibrary: Record<string, unknown> | null
+    rawDefineProperties(microAppWindow, {
+      mount: {
+        configurable: true,
+        get: () => mount,
+        set: (value) => {
+          if (this.active && isFunction(value) && !mount) {
+            handleUmdHooks(mount = value, unmount)
+          }
+        }
+      },
+      unmount: {
+        configurable: true,
+        get: () => unmount,
+        set: (value) => {
+          if (this.active && isFunction(value) && !unmount) {
+            handleUmdHooks(mount, unmount = value)
+          }
+        }
+      },
+      [`micro-app-${appName}`]: {
+        configurable: true,
+        get: () => microAppLibrary,
+        set: (value) => {
+          if (this.active && isPlainObject(value) && !microAppLibrary) {
+            microAppLibrary = value
+            handleUmdHooks(microAppLibrary.mount, microAppLibrary.unmount)
+          }
+        }
+      }
+    })
+
+    return () => {
+      mount = unmount = microAppLibrary = null
+    }
   }
 
   public setStaticAppState (state: string): void {

@@ -1,4 +1,4 @@
-// import 'virtual:uno.css'
+import 'virtual:uno.css'
 import { createApp } from 'vue'
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import App from './App.vue'
@@ -380,25 +380,28 @@ if (process.env.NODE_ENV !== 'production') {
 
 /* ---------------------- 插件相关 --------------------- */
 // vite环境下无法设置window指向proxyWindow，其值依然是iframeWindow，所以插件无法使用
-// window.escapeKey1 = 'escapeKey1' // 无效，只定义在iframeWindow上
-// window.escapeKey2 = 'escapeKey2' // 无效，只定义在iframeWindow上
-// if (window.__MICRO_APP_ENVIRONMENT__) {
-//   window.__MICRO_APP_PROXY_WINDOW__.escapeKey3 = 'escapeKey3' // 逃逸到rawWindow上
-//   window.__MICRO_APP_PROXY_WINDOW__.escapeKey4 = 'escapeKey4' // 逃逸到rawWindow上
-// }
+if (window.__MICRO_APP_ENVIRONMENT__) {
+  // ----------------------- scope相关---------------------开始
+  console.assert(window['scopeKey-vite-1'] === undefined, `window['scopeKey-vite-1'] 在主应用上存在，但不会兜底到主应用查找`)
+  console.assert(('scopeKey-vite-1' in window) === false , 'scopeKey-vite-1 in window 应该为false')
+  // ----------------------- scope相关---------------------结束
 
 
-// console.log('scopeProperties scopeKeySpe: ', scopeKeySpe)
-// console.log('scopeProperties window.scopeKeySpe: ', window.scopeKeySpe)
+  // ----------------------- escape相关--------------------开始
+  console.assert(window['escapeKey-vite-1'] !== undefined, `window['escapeKey-vite-1'] 兜底到主应用，且在主应用存在`)
+  console.assert(window['escapeKey-vite-2'] === undefined, `window['escapeKey-vite-2'] 兜底到主应用，但主应用上不存在`)
+  console.assert(escapeKey1 !== undefined, `escapeKey1 由全局插件配置，兜底到主应用，且在主应用存在`)
 
-// console.log('scopeProperties Vue: ', Vue)
-// console.log('scopeProperties window.Vue: ', window.Vue)
+  window['escapeKey-vite-2'] = 'escapeKey-vite-2 from child'
+  console.assert(window.rawWindow['escapeKey-vite-2'] === undefined, `window['escapeKey-vite-2']=xxx的设置不会兜底到主应用上`)
+  console.assert(window['escapeKey-vite-func']() === window.rawWindow, `兜底函数的this指向原生window`)
+  // ----------------------- escape相关--------------------结束
 
-// window.Vue = Vue ? Vue : 'child Vue'
-
-// console.log('scopeProperties Vue: ', Vue)
-// console.log('scopeProperties window.Vue: ', window.Vue)
-
+  console.assert(window.Vue === undefined, 'window.Vue 应该为false')
+  console.assert(('Vue' in window) === false, 'Vue in window 应该为false')
+  window.Vue = '子应用内部自定义Vue'
+  console.assert(window.Vue === '子应用内部自定义Vue', 'window.Vue 应该为子应用内部自定义Vue')
+}
 
 /* ---------------------- 特殊操作 --------------------- */
 // window.document.domain = 'localhost';

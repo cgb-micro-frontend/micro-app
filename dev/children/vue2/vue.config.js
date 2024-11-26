@@ -1,3 +1,5 @@
+const path = require('path');
+
 module.exports = {
   publicPath: '/micro-app/vue2/',
   outputDir: 'vue2',
@@ -22,5 +24,9 @@ module.exports = {
       jsonpFunction: `webpackJsonp-chile-vue2`,
       // globalObject: 'window',
     }
+  },
+  chainWebpack: config => {
+    config.resolve.alias
+      .set("@micro-zoe/micro-app", path.join(__dirname, '../../../lib/index.esm.js'))
   },
 }

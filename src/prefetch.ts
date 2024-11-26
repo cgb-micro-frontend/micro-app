@@ -29,6 +29,7 @@ import {
   promiseRequestIdle,
   isNumber,
   assign,
+  isTargetExtension,
 } from './libs/utils'
 import {
   fetchSource,
@@ -68,7 +69,7 @@ export default function preFetch (apps: prefetchParamList, delay?: number): void
 
     /**
      * TODO: remove setTimeout
-     * Is there a better way?
+     * 如果要保留setTimeout，则需要考虑清空定时器的情况
      */
     setTimeout(() => {
       // releasePrefetchEffect()
@@ -166,7 +167,7 @@ export function getGlobalAssets (assets: globalAssetsType): void {
 // TODO: requestIdleCallback for every file
 function fetchGlobalResources (resources: string[] | void, suffix: string, sourceHandler: SourceCenterType['link'] | SourceCenterType['script']) {
   if (isArray(resources)) {
-    const effectiveResource = resources!.filter((path) => isString(path) && path.includes(`.${suffix}`) && !sourceHandler.hasInfo(path))
+    const effectiveResource = resources!.filter((path) => isString(path) && isTargetExtension(path, suffix) && !sourceHandler.hasInfo(path))
 
     const fetchResourcePromise = effectiveResource.map((path) => fetchSource(path))
 

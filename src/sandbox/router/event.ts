@@ -14,7 +14,9 @@ import {
 import {
   getMicroPathFromURL,
   getMicroState,
+  getMicroRouterInfoState,
   isEffectiveApp,
+  isRouterModeCustom,
 } from './core'
 import {
   updateMicroLocation,
@@ -22,6 +24,8 @@ import {
 import {
   removeDomScope,
   isFunction,
+  macro,
+  getRootContainer,
 } from '../../libs/utils'
 import globalEnv from '../../libs/global_env'
 
@@ -47,7 +51,33 @@ export function addHistoryListener (appName: string): CallableFunction {
       }).includes(appName) &&
       !e.onlyForBrowser
     ) {
-      updateMicroLocationWithEvent(appName, getMicroPathFromURL(appName))
+      /**
+       * base app may respond to popstateEvent async(lazy load page & browser back/forward), but child app will respond to popstateEvent immediately(vue2, react), this will cause some problems
+       * 2 solutions:
+       *  1. child app respond to popstateEvent async -- router-event-delay
+       *  2. child app will not respond to popstateEvent in some scenarios (history.state===null || history.state?__MICRO_APP_STATE__[appName])
+       * NOTE 1:
+       *  1. browser back/forward
+       *  2. location.hash/search/pathname = xxx
+       *  3. <a href="/#/xxx">, <a href="/xxx">
+       *  4. history.back/go/forward
+       *  5. history.pushState/replaceState
+       *
+       * NOTE2:
+       *  1、react16 hash mode navigate by location.hash = xxx, history.state is always null, but react16 respond to popstateEvent sync
+       *  2、multiple child apps may has problems
+       */
+      if (
+        !isRouterModeCustom(appName) ||
+        !globalEnv.rawWindow.history.state ||
+        getMicroRouterInfoState(appName)
+      ) {
+        const container = appInstanceMap.get(appName)?.container
+        macro(
+          () => updateMicroLocationWithEvent(appName, getMicroPathFromURL(appName)),
+          (container && getRootContainer(container))?.getRouterEventDelay() ?? 0
+        )
+      }
     }
   }
 
@@ -70,27 +100,29 @@ export function updateMicroLocationWithEvent (
   appName: string,
   targetFullPath: string | null,
 ): void {
-  const app = appInstanceMap.get(appName)!
-  const proxyWindow = app.sandBox!.proxyWindow
-  const microAppWindow = app.sandBox!.microAppWindow
-  let isHashChange = false
-  // for hashChangeEvent
-  const oldHref = proxyWindow.location.href
-  // Do not attach micro state to url when targetFullPath is empty
-  if (targetFullPath) {
-    const oldHash = proxyWindow.location.hash
-    updateMicroLocation(appName, targetFullPath, microAppWindow.location as MicroLocation)
-    isHashChange = proxyWindow.location.hash !== oldHash
+  const app = appInstanceMap.get(appName)
+  if (app?.sandBox) {
+    const proxyWindow = app.sandBox.proxyWindow
+    const microAppWindow = app.sandBox.microAppWindow
+    let isHashChange = false
+    // for hashChangeEvent
+    const oldHref = proxyWindow.location.href
+    // Do not attach micro state to url when targetFullPath is empty
+    if (targetFullPath) {
+      const oldHash = proxyWindow.location.hash
+      updateMicroLocation(appName, targetFullPath, microAppWindow.location as MicroLocation)
+      isHashChange = proxyWindow.location.hash !== oldHash
+    }
+
+    // dispatch formatted popStateEvent to child
+    dispatchPopStateEventToMicroApp(appName, proxyWindow, microAppWindow)
+
+    // dispatch formatted hashChangeEvent to child when hash change
+    if (isHashChange) dispatchHashChangeEventToMicroApp(appName, proxyWindow, microAppWindow, oldHref)
+
+    // clear element scope before trigger event of next app
+    removeDomScope()
   }
-
-  // dispatch formatted popStateEvent to child
-  dispatchPopStateEventToMicroApp(appName, proxyWindow, microAppWindow)
-
-  // dispatch formatted hashChangeEvent to child when hash change
-  if (isHashChange) dispatchHashChangeEventToMicroApp(appName, proxyWindow, microAppWindow, oldHref)
-
-  // clear element scope before trigger event of next app
-  removeDomScope()
 }
 
 /**

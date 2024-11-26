@@ -39,5 +39,6 @@ module.exports = {
     'comma-dangle': ['error', 'only-multiline'],
     'no-eval': ['error', { allowIndirect: true }],
     'no-new-func': 0,
+    'space-before-function-paren': 0,
   }
 }

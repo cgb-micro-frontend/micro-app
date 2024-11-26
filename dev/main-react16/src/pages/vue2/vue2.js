@@ -29,7 +29,7 @@ function Vue2 () {
   }
 
   function jumpToHome () {
-    microApp.router.push({name: 'vue2', path: '/micro-app/vue2/#/'})
+    microApp.router.push({name: 'vue22', path: '/micro-app/vue2/#/'})
   }
 
   function jumpToPage2 () {
@@ -90,8 +90,8 @@ function Vue2 () {
         // disable-scopecss
         // disableSandbox
         // clear-data
-        // iframe
-        router-mode='pure'
+        iframe
+        router-mode='native'
       >
       </micro-app>
     </div>

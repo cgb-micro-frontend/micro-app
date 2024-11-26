@@ -20,7 +20,7 @@ const eventCenter = new EventCenter()
  */
 function createEventName (appName: string, fromBaseApp: boolean): string {
   if (!isString(appName) || !appName) return ''
-  return fromBaseApp ? `__from_base_app_${appName}__` : `__from_micro_app_${appName}__`
+  return fromBaseApp ? `__${appName}_from_base_app__` : `__${appName}_from_micro_app__`
 }
 
 // Global data

@@ -19,7 +19,15 @@ function isConstructorFunction (value: FunctionConstructor & {__MICRO_APP_IS_CON
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export default function bindFunctionToRawTarget<T = Window, B = unknown> (value: any, rawTarget: T, key = 'WINDOW'): B {
-  if (isFunction(value) && !isConstructorFunction(value) && !isBoundedFunction(value)) {
+  /**
+   * In safari, nest app like: A -> B -> C
+   * if B is iframe sandbox, and C is with sandbox, same property of document in C is abnormal
+   * e.g:
+   *  document.all:
+   *    - typeof document.all ==> 'function'
+   *    - document.all.bind ==> undefined
+   */
+  if (isFunction(value) && !isConstructorFunction(value) && !isBoundedFunction(value) && value.bind) {
     const cacheKey = `__MICRO_APP_BOUND_${key}_FUNCTION__`
     if (value[cacheKey]) return value[cacheKey]
 

@@ -25,7 +25,6 @@ import {
   isPromise,
   logError,
   getRootContainer,
-  isObject,
   execMicroAppGlobalHook,
   pureCreateElement,
   isDivElement,
@@ -63,7 +62,6 @@ export default class CreateApp implements AppInterface {
   private umdHookMount: Func | null = null
   private umdHookUnmount: Func | null = null
   private preRenderEvents?: CallableFunction[] | null
-  private lifeCycleState: string | null = null
   public umdMode = false
   public source: sourceType
   // TODO: 类型优化，加上iframe沙箱
@@ -144,8 +142,8 @@ export default class CreateApp implements AppInterface {
   }: OnLoadParam): void {
     if (++this.loadSourceLevel === 2) {
       this.source.html = html
-
-      if (!this.isPrefetch && !this.isUnmounted()) {
+      if (this.isUnmounted()) return
+      if (!this.isPrefetch) {
         getRootContainer(this.container!).mount(this)
       } else if (this.isPrerender) {
         /**
@@ -225,6 +223,7 @@ export default class CreateApp implements AppInterface {
       this.isPrerender = false
 
       // dispatch state event to micro app
+      // TODO: statechange 还是 state-change，保持一致
       dispatchCustomEventToMicroApp(this, 'statechange', {
         appState: appStates.LOADING
       })
@@ -283,9 +282,8 @@ export default class CreateApp implements AppInterface {
         this.routerMode = routerMode
 
         const dispatchBeforeMount = () => {
-          this.setLifeCycleState(lifeCycles.BEFOREMOUNT)
           dispatchLifecyclesEvent(
-            this.container!,
+            this.container,
             this.name,
             lifeCycles.BEFOREMOUNT,
           )
@@ -304,7 +302,7 @@ export default class CreateApp implements AppInterface {
           appState: appStates.MOUNTING
         })
 
-        // TODO: 将所有cloneContainer中的'as Element'去掉，兼容shadowRoot的场景
+        // TODO: 兼容shadowRoot的场景
         this.cloneContainer(this.container, this.source.html, !this.umdMode)
 
         this.sandBox?.start({
@@ -315,36 +313,33 @@ export default class CreateApp implements AppInterface {
         })
 
         if (!this.umdMode) {
-          // update element info of html
-          this.sandBox?.actionBeforeExecScripts(this.container)
+          // patch element info of html
+          this.sandBox?.actionsBeforeExecScripts(this.container, (mount, unmount) => {
+            if (!this.umdMode && !this.isUnmounted()) {
+              this.umdHookMount = isFunction(mount) ? mount : null
+              // umdHookUnmount can works in default mode, register by window.unmount
+              this.umdHookUnmount = isFunction(unmount) ? unmount : null
+              // if mount & unmount is function, the sub app is umd mode
+              if (isFunction(this.umdHookMount) && isFunction(this.umdHookUnmount)) {
+                this.sandBox?.markUmdMode(this.umdMode = true)
+                try {
+                  // if appState is mounted, it means that isFinished is true and this.handleMounted has already been executed, just exec this.umdHookMount
+                  if (this.getAppState() === appStates.MOUNTED) {
+                    this.umdHookMount(microApp.getData(this.name, true))
+                  } else {
+                    this.handleMounted(this.umdHookMount(microApp.getData(this.name, true)))
+                  }
+                } catch (e) {
+                  logError('An error occurred when mount \n', this.name, e)
+                }
+              }
+            }
+          })
+
           // if all js are executed, param isFinished will be true
           execScripts(this, (isFinished: boolean) => {
-            if (!this.umdMode) {
-              const { mount, unmount } = this.getUmdLibraryHooks()
-              /**
-               * umdHookUnmount can works in default mode
-               * register through window.unmount
-               */
-              // TODO: 不对，这里要改，因为unmount不一定是函数
-              this.umdHookUnmount = unmount as Func
-              // if mount & unmount is function, the sub app is umd mode
-              if (isFunction(mount) && isFunction(unmount)) {
-                this.umdHookMount = mount as Func
-                // sandbox must exist
-                this.sandBox!.markUmdMode(this.umdMode = true)
-                try {
-                  this.handleMounted(this.umdHookMount(microApp.getData(this.name, true)))
-                } catch (e) {
-                  /**
-                   * TODO:
-                   *  1. 是否应该直接抛出错误
-                   *  2. 是否应该触发error生命周期
-                   */
-                  logError('An error occurred in window.mount \n', this.name, e)
-                }
-              } else if (isFinished === true) {
-                this.handleMounted()
-              }
+            if (!this.umdMode && isFinished === true) {
+              this.handleMounted()
             }
           })
         } else {
@@ -352,14 +347,23 @@ export default class CreateApp implements AppInterface {
           try {
             this.handleMounted(this.umdHookMount!(microApp.getData(this.name, true)))
           } catch (e) {
-            logError('An error occurred in window.mount \n', this.name, e)
+            logError('An error occurred when mount \n', this.name, e)
           }
         }
       }
     }
 
+    /**
+     * Initialization of sandbox is async, especially iframe sandbox are macro tasks
+     * when child apps switch quickly, we need to pay attention to the following points:
+     * NOTE:
+     *  1. unmount app before exec nextAction (especially: iframe sandbox + default mode + remount)
+     *     this.container is null, this.sandBox will not start
+     *  2. remount app of note 1
+     *  3. unmount app during exec js
+     */
     // TODO: 可优化？
-    this.sandBox ? this.sandBox.sandboxReady.then(nextAction) : nextAction()
+    this.sandBox ? this.sandBox.sandboxReady.then(() => !this.isUnmounted() && nextAction()) : nextAction()
   }
 
   /**
@@ -368,15 +372,16 @@ export default class CreateApp implements AppInterface {
    */
   private handleMounted (umdHookMountResult?: unknown): void {
     const dispatchAction = () => {
+      const nextAction = () => this.actionsAfterMounted()
       if (isPromise(umdHookMountResult)) {
         umdHookMountResult
-          .then(() => this.dispatchMountedEvent())
+          .then(nextAction)
           .catch((e) => {
             logError('An error occurred in window.mount \n', this.name, e)
-            this.dispatchMountedEvent()
+            nextAction()
           })
       } else {
-        this.dispatchMountedEvent()
+        nextAction()
       }
     }
 
@@ -391,7 +396,7 @@ export default class CreateApp implements AppInterface {
   /**
    * dispatch mounted event when app run finished
    */
-  private dispatchMountedEvent (): void {
+  private actionsAfterMounted (): void {
     if (!this.isUnmounted()) {
       this.setAppState(appStates.MOUNTED)
       // call window.onmount of child app
@@ -410,11 +415,9 @@ export default class CreateApp implements AppInterface {
       // dispatch mounted event to micro app
       dispatchCustomEventToMicroApp(this, 'mounted')
 
-      this.setLifeCycleState(lifeCycles.MOUNTED)
-
       // dispatch event mounted to parent
       dispatchLifecyclesEvent(
-        this.container!,
+        this.container,
         this.name,
         lifeCycles.MOUNTED,
       )
@@ -440,6 +443,8 @@ export default class CreateApp implements AppInterface {
    * unmount app
    * NOTE:
    *  1. do not add any params on account of unmountApp
+   *  2. this.container maybe null: Initialization of sandbox is async, child app may unmount before exec nextAction of mount
+   *  3. unmount app when loading files (this.container is not null)
    * @param destroy completely destroy, delete cache resources
    * @param clearData clear data of dateCenter
    * @param keepRouteState keep route state when unmount, default is false
@@ -455,14 +460,34 @@ export default class CreateApp implements AppInterface {
 
     this.setAppState(appStates.UNMOUNT)
 
-    let umdHookUnmountResult: unknown = null
     try {
-      // call umd unmount hook before the sandbox is cleared
-      umdHookUnmountResult = this.umdHookUnmount?.(microApp.getData(this.name, true))
+      this.handleUnmounted(
+        destroy,
+        clearData,
+        keepRouteState,
+        unmountcb,
+        this.umdHookUnmount?.(microApp.getData(this.name, true)),
+      )
     } catch (e) {
-      logError('An error occurred in window.unmount \n', this.name, e)
+      logError('An error occurred when unmount \n', this.name, e)
     }
+  }
 
+  /**
+   * handle for promise umdHookUnmount
+   * @param destroy completely destroy, delete cache resources
+   * @param clearData clear data of dateCenter
+   * @param keepRouteState keep route state when unmount, default is false
+   * @param unmountcb callback of unmount
+   * @param umdHookUnmountResult result of umdHookUnmount
+   */
+  private handleUnmounted (
+    destroy: boolean,
+    clearData: boolean,
+    keepRouteState: boolean,
+    unmountcb?: CallableFunction,
+    umdHookUnmountResult?: unknown,
+  ): void {
     // dispatch state event to micro app
     dispatchCustomEventToMicroApp(this, 'statechange', {
       appState: appStates.UNMOUNT
@@ -478,33 +503,7 @@ export default class CreateApp implements AppInterface {
       microGlobalEvent.ONUNMOUNT,
     )
 
-    this.handleUnmounted({
-      destroy,
-      clearData,
-      keepRouteState,
-      unmountcb,
-      umdHookUnmountResult,
-    })
-  }
-
-  /**
-   * handle for promise umdHookUnmount
-   * @param destroy completely destroy, delete cache resources
-   * @param clearData clear data of dateCenter
-   * @param keepRouteState keep route state when unmount, default is false
-   * @param unmountcb callback of unmount
-   * @param umdHookUnmountResult result of umdHookUnmount
-   */
-  private handleUnmounted ({
-    destroy,
-    clearData,
-    keepRouteState,
-    unmountcb,
-    umdHookUnmountResult,
-  }: UnmountParam & {
-    umdHookUnmountResult: unknown,
-  }): void {
-    const nextAction = () => this.actionsForUnmount({
+    const nextAction = () => this.actionsAfterUnmounted({
       destroy,
       clearData,
       keepRouteState,
@@ -514,7 +513,12 @@ export default class CreateApp implements AppInterface {
     if (isPromise(umdHookUnmountResult)) {
       // async window.unmount will cause appName bind error in nest app
       removeDomScope()
-      umdHookUnmountResult.then(nextAction).catch(nextAction)
+      umdHookUnmountResult
+        .then(nextAction)
+        .catch((e) => {
+          logError('An error occurred in window.unmount \n', this.name, e)
+          nextAction()
+        })
     } else {
       nextAction()
     }
@@ -527,7 +531,7 @@ export default class CreateApp implements AppInterface {
    * @param keepRouteState keep route state when unmount, default is false
    * @param unmountcb callback of unmount
    */
-  private actionsForUnmount ({
+  private actionsAfterUnmounted ({
     destroy,
     clearData,
     keepRouteState,
@@ -550,11 +554,9 @@ export default class CreateApp implements AppInterface {
       clearData: clearData || destroy,
     })
 
-    this.setLifeCycleState(lifeCycles.UNMOUNT)
-
     // dispatch unmount event to base app
     dispatchLifecyclesEvent(
-      this.container!,
+      this.container,
       this.name,
       lifeCycles.UNMOUNT,
     )
@@ -565,13 +567,25 @@ export default class CreateApp implements AppInterface {
   }
 
   private clearOptions (destroy: boolean): void {
-    this.container!.innerHTML = ''
-    this.container = null
     this.isPrerender = false
     this.preRenderEvents = null
     this.setKeepAliveState(null)
+    if (this.container) {
+      this.container.innerHTML = ''
+      this.container = null
+    } else if (!this.umdMode) {
+      /**
+       * this.container is null means sandBox.start has not exec, so sandBox.stop won't exec either
+       * we should remove iframeElement in default mode manually
+       */
+      this.sandBox?.deleteIframeElement?.()
+    }
     // in iframe sandbox & default mode, delete the sandbox & iframeElement
-    // TODO: with沙箱与iframe沙箱保持一致：with沙箱默认模式下删除 或者 iframe沙箱umd模式下保留
+    /**
+     * TODO:
+     *  1. with沙箱与iframe沙箱保持一致：with沙箱默认模式下删除 或者 iframe沙箱umd模式下保留
+     *  2. 接1.0，this.sandBox置空，还需要注意后续app.sandBox相关操作，比如 scripts.ts --> app.iframe ? app.sandBox!.microBody : app.querySelector('micro-app-body')，如果是fiber或者预加载，会存在卸载后js还在处理的情况
+     */
     if (this.iframe && !this.umdMode) this.sandBox = null
     if (destroy) this.actionsForCompletelyDestroy()
     removeDomScope()
@@ -599,10 +613,9 @@ export default class CreateApp implements AppInterface {
       appState: 'afterhidden',
     })
 
-    this.setLifeCycleState(lifeCycles.AFTERHIDDEN)
     // dispatch afterHidden event to base app
     dispatchLifecyclesEvent(
-      this.container!,
+      this.container,
       this.name,
       lifeCycles.AFTERHIDDEN,
     )
@@ -665,7 +678,7 @@ export default class CreateApp implements AppInterface {
     /**
      * TODO:
      *  问题：当路由模式为custom时，keep-alive应用在重新展示，是否需要根据子应用location信息更新浏览器地址？
-     *  暂时不这么做吧，因为无法确定二次展示时新旧地址是否相同，是否带有特殊信息
+     *  暂时不这么做，因为无法确定二次展示时新旧地址是否相同，是否带有特殊信息
      */
     if (isRouterModeSearch(this.name)) {
       // called before lifeCyclesEvent
@@ -676,8 +689,6 @@ export default class CreateApp implements AppInterface {
     dispatchCustomEventToMicroApp(this, 'appstate-change', {
       appState: 'aftershow',
     })
-
-    this.setLifeCycleState(lifeCycles.AFTERSHOW)
 
     // dispatch afterShow event to base app
     dispatchLifecyclesEvent(
@@ -692,15 +703,13 @@ export default class CreateApp implements AppInterface {
    * @param e Error
    */
   public onerror (e: Error): void {
-    this.setLifeCycleState(lifeCycles.ERROR)
-
     // dispatch state event to micro app
     dispatchCustomEventToMicroApp(this, 'statechange', {
       appState: appStates.LOAD_FAILED
     })
 
     dispatchLifecyclesEvent(
-      this.container!,
+      this.container,
       this.name,
       lifeCycles.ERROR,
       e,
@@ -722,8 +731,8 @@ export default class CreateApp implements AppInterface {
 
   /**
    * clone origin elements to target
-   * @param origin Cloned element
    * @param target Accept cloned elements
+   * @param origin Cloned element
    * @param deep deep clone or transfer dom
    */
   private cloneContainer <T extends HTMLElement | ShadowRoot | null> (
@@ -766,16 +775,6 @@ export default class CreateApp implements AppInterface {
     return this.state
   }
 
-  // set app lifeCycleState
-  private setLifeCycleState (state: string): void {
-    this.lifeCycleState = state
-  }
-
-  // get app lifeCycleState
-  public getLifeCycleState (): string {
-    return this.lifeCycleState || ''
-  }
-
   // set keep-alive state
   private setKeepAliveState (state: string | null): void {
     this.keepAliveState = state
@@ -794,28 +793,6 @@ export default class CreateApp implements AppInterface {
   // is app already hidden
   public isHidden (): boolean {
     return keepAliveStates.KEEP_ALIVE_HIDDEN === this.keepAliveState
-  }
-
-  // get umd library, if it not exist, return empty object
-  private getUmdLibraryHooks (): Record<string, unknown> {
-    // after execScripts, the app maybe unmounted
-    if (!this.isUnmounted() && this.sandBox) {
-      const libraryName = getRootContainer(this.container!).getAttribute('library') || `micro-app-${this.name}`
-
-      const proxyWindow = this.sandBox.proxyWindow as Record<string, any>
-
-      // compatible with pre versions
-      if (isObject(proxyWindow[libraryName])) {
-        return proxyWindow[libraryName]
-      }
-
-      return {
-        mount: proxyWindow.mount,
-        unmount: proxyWindow.unmount,
-      }
-    }
-
-    return {}
   }
 
   private getMicroAppGlobalHook (eventName: string): Func | null {

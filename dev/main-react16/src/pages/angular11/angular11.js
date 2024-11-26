@@ -36,7 +36,7 @@ function Angular11 () {
         inline
         // disableScopecss
         // keep-alive
-        // iframe
+        iframe
         // disable-memory-router
       >
       </micro-app>

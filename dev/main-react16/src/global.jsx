@@ -22,7 +22,7 @@ const prefetchConfig = [
   // },
   {
     name: 'vue2',
-    url: `${config.vue2}micro-app/vue2`,
+    url: `${config.vue2}micro-app/vue2/`,
     // 'disable-scopecss': true,
     level: 3,
     // 'default-page': '/micro-app/vue2/#/page2',
@@ -60,7 +60,14 @@ const prefetchConfig = [
 
 // microApp.preFetch(prefetchConfig)
 
+window['escapeKey1'] = 'escapeKey1 from base app by global plugin'
 window['escapeKey3'] = 'escapeKey3 from base app'
+window['scopeKey-vite-1'] = 'scopeKey-vite-1 from base app'
+window['escapeKey-vite-1'] = 'escapeKey-vite-1 from base app'
+window['escapeKey-vite-func'] = function () {
+  console.log('escapeKey-vite-func', this)
+  return this
+}
 window.Vue = { tip: 'Vue from base' }
 
 microApp.start({
@@ -75,7 +82,7 @@ microApp.start({
   // 'disable-patch-request': true,
   // 'keep-router-state': true,
   // 'hidden-router': true,
-  // 'router-mode': 'custom',
+  // 'router-mode': 'state',
   // esmodule: true,
   // ssr: true,
   // preFetchApps: prefetchConfig,
@@ -87,29 +94,29 @@ microApp.start({
   // },
   // iframeSrc: 'http://localhost:3000/',
   lifeCycles: {
-    created (e) {
-      console.log('created 全局监听', 'name:', e.detail.name)
+    created (e, appName) {
+      console.log(`子应用${appName}被创建 -- 全局监听`)
     },
-    beforemount (e) {
-      console.log('beforemount 全局监听', 'name:', e.detail.name)
+    beforemount (e, appName) {
+      console.log(`子应用${appName}即将渲染 -- 全局监听`)
     },
-    mounted (e) {
-      console.log('mounted 全局监听', 'name:', e.detail.name)
+    mounted (e, appName) {
+      console.log(`子应用${appName}已经渲染完成 -- 全局监听`)
     },
-    unmount (e) {
-      console.log('unmount 全局监听', 'name:', e.detail.name)
+    unmount (e, appName) {
+      console.log(`子应用${appName}已经卸载 -- 全局监听`)
     },
-    error (e) {
-      console.log('error 全局监听', 'name:', e.detail.name)
+    error (e, appName) {
+      console.log(`子应用${appName}加载出错 -- 全局监听`)
     },
-    beforeshow (e) {
-      console.log('beforeshow 全局监听', 'name:', e.detail.name)
+    beforeshow (e, appName) {
+      console.log(`子应用${appName} beforeshow -- 全局监听`)
     },
-    aftershow (e) {
-      console.log('aftershow 全局监听', 'name:', e.detail.name)
+    aftershow (e, appName) {
+      console.log(`子应用${appName} aftershow -- 全局监听`)
     },
-    afterhidden (e) {
-      console.log('afterhidden 全局监听', 'name:', e.detail.name)
+    afterhidden (e, appName) {
+      console.log(`子应用${appName} afterhidden -- 全局监听`)
     },
   },
   plugins: {
@@ -147,6 +154,10 @@ microApp.start({
       vite2: [{
         escapeProperties: ['escapeKey3', 'escapeKey4'],
       }],
+      vite4: [{
+        scopeProperties: ['scopeKey-vite-1', 'scopeKey-vite-2'],
+        escapeProperties: ['escapeKey-vite-1', 'escapeKey-vite-2', 'escapeKey-vite-func'],
+      }],
     }
   },
   /**
@@ -182,7 +193,11 @@ microApp.start({
       return true
     }
     return false
-  }
+  },
+  // globalAssets: {
+  //   js: ['http://127.0.0.1:8080/a.js'], // js地址
+  //   css: ['http://127.0.0.1:8080/test.css'], // css地址
+  // }
 })
 
 // microApp.start({
@@ -246,3 +261,14 @@ window.onclick = function () {
 // window.onunhandledrejection = (event) => {
 //   console.error(`基座Promise报错监听 -- window.onunhandledrejection: `, event);
 // }
+
+/* ---------------------- 测试message, postMessage --------------------- */
+// window.addEventListener('message', function(event) {
+//   console.log('基座监听的message事件', event.data, event)
+// })
+
+window.insertNodeFromBaseApp = function () {
+  const div = window.document.createElement('div')
+  div.innerHTML = 'insertNodeFromBaseApp'
+  document.body.appendChild(div)
+}

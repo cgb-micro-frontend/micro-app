@@ -109,7 +109,7 @@ function vite2 (props) {
         // keep-alive
         // default-page='/micro-app/vite2/element-plus'
         // disable-memory-router
-        // router-mode='native'
+        // router-mode='state'
         baseroute='/micro-app/demo/vite2'
       >
       </micro-app>

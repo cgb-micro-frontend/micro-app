@@ -351,28 +351,28 @@ export default class App extends React.Component {
     //   })
     // }, 0);
 
-    this.releaseBeforeEach1 = microApp.router.beforeEach((to, from, appName) => {
-      // const a = document.createElement('div')
-      // a.innerHTML = '44444444'
-      // document.body.appendChild(a)
-      console.log('全局 beforeEach: ', to, from, appName)
-    })
+    // this.releaseBeforeEach1 = microApp.router.beforeEach((to, from, appName) => {
+    //   // const a = document.createElement('div')
+    //   // a.innerHTML = '44444444'
+    //   // document.body.appendChild(a)
+    //   console.log('全局 beforeEach: ', to, from, appName)
+    // })
 
-    this.releaseBeforeEach2 = microApp.router.beforeEach({
-      react16 (to, from) {
-        console.log('指定 beforeEach: ', to, from)
-      }
-    })
+    // this.releaseBeforeEach2 = microApp.router.beforeEach({
+    //   react16 (to, from) {
+    //     console.log('指定 beforeEach: ', to, from)
+    //   }
+    // })
 
-    this.releaseAfterEach1 = microApp.router.afterEach((to, from, appName) => {
-      console.log('全局 afterEach: ', to, from, appName)
-    })
+    // this.releaseAfterEach1 = microApp.router.afterEach((to, from, appName) => {
+    //   console.log('全局 afterEach: ', to, from, appName)
+    // })
 
-    this.releaseAfterEach2 = microApp.router.afterEach({
-      react16 (to, from) {
-        console.log('指定 afterEach: ', to, from)
-      }
-    })
+    // this.releaseAfterEach2 = microApp.router.afterEach({
+    //   react16 (to, from) {
+    //     console.log('指定 afterEach: ', to, from)
+    //   }
+    // })
 
     microApp.router.setBaseAppRouter(this.props.history)
   }
@@ -433,7 +433,7 @@ export default class App extends React.Component {
                   baseroute={this.state.baseroute}
                   // keep-alive
                   // destroy
-                  // inline
+                  inline
                   // disableSandbox
                   // disable-sandbox
                   // disableScopecss
@@ -442,7 +442,7 @@ export default class App extends React.Component {
                   // disable-memory-router
                   router-mode={this.state.routerMode}
                   // keep-router-state
-                  // default-page='/micro-app/react16/page2'
+                  default-page='/micro-app/react16/page2'
                   // hidden-router
                   // disable-patch-request
                   // fiber
@@ -453,7 +453,7 @@ export default class App extends React.Component {
                 </micro-app>
               )
             }
-            {/* <iframe src={this.state.url} onLoad={this.mounted} width='700' height='700'></iframe> */}
+            {/* <iframe src={this.state.url} onLoad={this.mounted} width='600' height='700'></iframe> */}
             <Modal
               visible={this.state.showModal}
               maskClosable={true}

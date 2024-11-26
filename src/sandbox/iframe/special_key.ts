@@ -1,11 +1,16 @@
+
+export const UN_PROXY_INSTANCEOF_KEYS = [
+  'Array'
+]
+
 export const escape2RawWindowKeys = [
   'getComputedStyle',
+  // FIX ISSUE: https://github.com/micro-zoe/micro-app/issues/1292
+  'DOMParser',
   'visualViewport',
   'matchMedia',
-  // 'DOMParser',
   'ResizeObserver',
   'IntersectionObserver',
-  // 'dispatchEvent',
 ]
 
 export const escape2RawWindowRegExpKeys = [
@@ -13,13 +18,11 @@ export const escape2RawWindowRegExpKeys = [
   /mutationObserver$/i,
   /height$|width$/i,
   /offset$/i,
-  // /event$/i,
   /selection$/i,
   /^range/i,
   /^screen/i,
   /^scroll/i,
   /X$|Y$/,
-  // /^(?:HTML\w*)?Element$/,
 ]
 
 export const uniqueDocumentElement = [
@@ -29,33 +32,50 @@ export const uniqueDocumentElement = [
   'title',
 ]
 
-// 有shadowRoot则代理到shadowRoot否则代理到原生document上 (属性)
+export const hijackMicroLocationKeys = [
+  'host',
+  'hostname',
+  'port',
+  'protocol',
+  'origin',
+]
+
+// hijack InstanceOf of iframe class
+export const hijackInstanceOfWindowRegExpKeys = [
+  /^((HTML|SVG)\w*|MathML)?Element$/,
+  /^(Node|Text|Attr|Comment|EventTarget|CharacterData|NamedNodeMap|ShadowRoot)$/,
+  /^Document(Type|Fragment)?$/,
+  /^(?!PopState).*Event$/,
+  /^DataTransfer/
+]
+
+// proxy to shadowRoot or rawDocument (property)
 export const proxy2RawDocOrShadowKeys = [
   'childElementCount',
   'children',
   'firstElementChild',
   'firstChild',
   'lastElementChild',
-  'activeElement', // Element not has, document or shadowRoot has
-  'fullscreenElement', // Element not has, document or shadowRoot has
-  'pictureInPictureElement', // Element not has, document or shadowRoot has
-  'pointerLockElement', // Element not has, document or shadowRoot has
-  'styleSheets', // Element not has, document or shadowRoot has
+  'activeElement', // not for Element, just for document/shadowRoot
+  'fullscreenElement', // not for Element, just for document/shadowRoot
+  'pictureInPictureElement', // not for Element, just for document/shadowRoot
+  'pointerLockElement', // not for Element, just for document/shadowRoot
+  'styleSheets', // not for Element, just for document/shadowRoot
 ]
 
-// 有shadowRoot则代理到shadowRoot否则代理到原生document上 (方法)
+// proxy to shadowRoot or rawDocument (method)
 export const proxy2RawDocOrShadowMethods = [
   'append',
   'contains',
   'replaceChildren',
-  'createRange', // Element not has, document or shadowRoot has
-  'getSelection', // Element not has, document or shadowRoot has
-  'elementFromPoint', // Element not has, document or shadowRoot has
-  'elementsFromPoint', // Element not has, document or shadowRoot has
-  'getAnimations', // Element not has, document or shadowRoot has
+  'createRange', // not for Element, just for document/shadowRoot
+  'getSelection', // not for Element, just for document/shadowRoot
+  'elementFromPoint', // not for Element, just for document/shadowRoot
+  'elementsFromPoint', // not for Element, just for document/shadowRoot
+  'getAnimations', // not for Element, just for document/shadowRoot
 ]
 
-// 直接代理到原生document上 (属性)
+// proxy to rawDocument (property)
 export const proxy2RawDocumentKeys = [
   'characterSet',
   'compatMode',
@@ -76,7 +96,7 @@ export const proxy2RawDocumentKeys = [
   'fonts',
 ]
 
-// 直接代理到原生document上 (方法)
+// proxy to rawDocument (method)
 export const proxy2RawDocumentMethods = [
   'execCommand',
   'createRange',
@@ -85,5 +105,4 @@ export const proxy2RawDocumentMethods = [
   'getElementsByTagNameNS',
   'hasFocus',
   'prepend',
-  // 'dispatchEvent',
 ]

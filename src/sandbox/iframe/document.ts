@@ -11,7 +11,8 @@ import {
   logWarn,
   isUniqueElement,
   isInvalidQuerySelectorKey,
-  throttleDeferForSetAppName,
+  throttleDeferForIframeAppName,
+  isWebComponentElement,
 } from '../../libs/utils'
 import globalEnv from '../../libs/global_env'
 import bindFunctionToRawTarget from '../bind_function'
@@ -86,7 +87,10 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
     tagName: string,
     options?: ElementCreationOptions,
   ): HTMLElement {
-    const element = rawMicroCreateElement.call(this, tagName, options)
+    let element = rawMicroCreateElement.call(this, tagName, options)
+    if (isWebComponentElement(element)) {
+      element = rawMicroCreateElement.call(rawDocument, tagName, options)
+    }
     return updateElementInfo(element, appName)
   }
 
@@ -114,42 +118,63 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
     return updateElementInfo<Comment>(element, appName)
   }
 
-  function getDefaultRawTarget (target: Document): Document {
-    return microDocument !== target ? target : rawDocument
+  function getBindTarget (target: Document): Document {
+    /**
+     * handler for:
+     *  1. document.getElementsByTagName('head')[0].querySelector('script')
+     *  2. document.querySelector('body').querySelectorAll('script')
+     *  ...
+     */
+    throttleDeferForIframeAppName(appName)
+    // DOMParser.document !== microDocument
+    return microDocument === target ? rawDocument : target
   }
 
   // query element👇
   function querySelector (this: Document, selectors: string): any {
+    const _this = getBindTarget(this)
     if (
       !selectors ||
       isUniqueElement(selectors) ||
-      microDocument !== this
+      rawDocument !== _this
     ) {
-      const _this = getDefaultRawTarget(this)
       return rawMicroQuerySelector.call(_this, selectors)
     }
 
-    return appInstanceMap.get(appName)?.querySelector(selectors) ?? null
+    /**
+     * The child app cannot query the base element inside iframe
+     * Same for querySelectorAll
+     *
+     * Scenes:
+     *  1. vue-router@4.x --> createWebHistory(base?: string)
+     *    const baseEl = document.querySelector('base')
+     *    base = (baseEl && baseEl.getAttribute('href')) || '/'
+     *
+     * Issue: https://github.com/micro-zoe/micro-app/issues/1335
+     */
+    const result = appInstanceMap.get(appName)?.querySelector(selectors)
+    return result || selectors === 'base' ? result : rawMicroQuerySelector.call(microDocument, selectors)
   }
 
   function querySelectorAll (this: Document, selectors: string): any {
+    const _this = getBindTarget(this)
     if (
       !selectors ||
       isUniqueElement(selectors) ||
-      microDocument !== this
+      rawDocument !== _this
     ) {
-      const _this = getDefaultRawTarget(this)
       return rawMicroQuerySelectorAll.call(_this, selectors)
     }
 
-    return appInstanceMap.get(appName)?.querySelectorAll(selectors) ?? []
+    const result = appInstanceMap.get(appName)?.querySelectorAll(selectors) ?? []
+    return result.length || selectors === 'base' ? result : rawMicroQuerySelectorAll.call(microDocument, selectors)
   }
 
   microRootDocument.prototype.querySelector = querySelector
   microRootDocument.prototype.querySelectorAll = querySelectorAll
 
   microRootDocument.prototype.getElementById = function getElementById (key: string): HTMLElement | null {
-    const _this = getDefaultRawTarget(this)
+    const _this = getBindTarget(this)
     if (isInvalidQuerySelectorKey(key)) {
       return rawMicroGetElementById.call(_this, key)
     }
@@ -162,7 +187,7 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
   }
 
   microRootDocument.prototype.getElementsByClassName = function getElementsByClassName (key: string): HTMLCollectionOf<Element> {
-    const _this = getDefaultRawTarget(this)
+    const _this = getBindTarget(this)
     if (isInvalidQuerySelectorKey(key)) {
       return rawMicroGetElementsByClassName.call(_this, key)
     }
@@ -175,13 +200,14 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
   }
 
   microRootDocument.prototype.getElementsByTagName = function getElementsByTagName (key: string): HTMLCollectionOf<Element> {
-    const _this = getDefaultRawTarget(this)
+    const _this = getBindTarget(this)
     if (
       isUniqueElement(key) ||
       isInvalidQuerySelectorKey(key)
     ) {
       return rawMicroGetElementsByTagName.call(_this, key)
-    } else if (/^script|base$/i.test(key)) {
+    // just script, not base
+    } else if (/^script$/i.test(key)) {
       return rawMicroGetElementsByTagName.call(microDocument, key)
     }
 
@@ -193,7 +219,7 @@ function patchDocumentPrototype (appName: string, microAppWindow: microAppWindow
   }
 
   microRootDocument.prototype.getElementsByName = function getElementsByName (key: string): NodeListOf<HTMLElement> {
-    const _this = getDefaultRawTarget(this)
+    const _this = getBindTarget(this)
     if (isInvalidQuerySelectorKey(key)) {
       return rawMicroGetElementsByName.call(_this, key)
     }
@@ -275,7 +301,7 @@ function patchDocumentProperty (
       enumerable: true,
       configurable: true,
       get: () => {
-        throttleDeferForSetAppName(appName)
+        throttleDeferForIframeAppName(appName)
         return rawDocument[tagName]
       },
       set: (value: unknown) => { rawDocument[tagName] = value },
@@ -284,7 +310,7 @@ function patchDocumentProperty (
 }
 
 function patchDocumentEffect (appName: string, microAppWindow: microAppWindowType): CommonEffectHook {
-  const { rawDocument, rawAddEventListener, rawRemoveEventListener } = globalEnv
+  const { rawDocument, rawAddEventListener, rawRemoveEventListener, rawDispatchEvent } = globalEnv
   const eventListenerMap = new Map<string, Set<MicroEventListener>>()
   const sstEventListenerMap = new Map<string, Set<MicroEventListener>>()
   let onClickHandler: unknown = null
@@ -323,6 +349,10 @@ function patchDocumentEffect (appName: string, microAppWindow: microAppWindowTyp
     }
     const handler = listener?.__MICRO_APP_BOUND_FUNCTION__ || listener
     rawRemoveEventListener.call(getEventTarget(type, this), type, handler, options)
+  }
+
+  microRootDocument.prototype.dispatchEvent = function (event: Event): boolean {
+    return rawDispatchEvent.call(getEventTarget(event?.type, this), event)
   }
 
   // 重新定义microRootDocument.prototype 上的on开头方法

@@ -7,17 +7,132 @@
 - 修订版本号：每周末会进行日常 bugfix 更新。（如果有紧急的 bugfix，则任何时候都可发布）
 
 ---
+### 1.0.0-rc.15
+
+`2024-11-22`
+- **Bug Fix**
+  - 🐞  修复removeChild异常。
+
+### 1.0.0-rc.14
+
+`2024-11-22`
+- **Bug Fix**
+  - 🐞 修复 子应用a标签href为瞄点 #xxx引起异常。
+
+### 1.0.0-rc.13
+
+`2024-10-16`
+- **Bug Fix**
+  - 🐞 修复 子应用instanceof Array无法正确判定，[issue 1400](https://github.com/micro-zoe/micro-app/issues/1400)。
+  - 🐞 修复 子应用a标签href为undefined引起异常。
+- **Feature**
+  - 支持 cesium mars3d 生态。
+
+### 1.0.0-rc.12
+
+`2024-9-30`
+
+- **Feature**
+  - 子应用支持 web Component
+
+
+### 1.0.0-rc.11
+
+`2024-9-29`
+
+- **Bug Fix**
+  - 🐞 修复 wangEditor-next 富文本插件报错，[issue 1354](https://github.com/micro-zoe/micro-app/issues/1354)。
+  - 🐞 修复 vue3.5中自定义元素defineCustomElement在子应用中报错，[issue 1367](https://github.com/micro-zoe/micro-app/issues/1367)。
+  - 🐞 修复 new Worker 不传第二个参数报错，[issue 1368](https://github.com/micro-zoe/micro-app/issues/1368)。
+
+### 1.0.0-rc.10
+
+`2024-9-14`
+
+- **Bug Fix**
+  - 🐞 修复 子应用a标签href属性丢失，[issue 1358](https://github.com/micro-zoe/micro-app/issues/1358)。
+
+
+### 1.0.0-rc.9
+
+`2024-9-10`
+
+- **Feature**
+  - 支持 cesiumjs及其生态, [issue 1351](https://github.com/micro-zoe/micro-app/issues/1351)
+- **Bug Fix**
+  - 🐞 修复 vite环境下iframe沙箱对于插件系统`escapeProperties`不支持的问题。
+  - 🐞 修复 iframe沙箱下jquery通过`$('body').append`创建元素逃逸的问题，[issue 1339](https://github.com/micro-zoe/micro-app/issues/1339)。
+  - 🐞 修复 iframe沙箱部分场景下执行`instanceOf`导致死循环的问题，[issue 1341](https://github.com/micro-zoe/micro-app/issues/1341)。
+  - 🐞 修复 子应用css样式缺少闭合标签导致解析失败的问题，[issue 1342](https://github.com/micro-zoe/micro-app/issues/1342)。
+
+
+### 1.0.0-rc.8
+
+`2024-8-20`
+
+- **Bug Fix**
+  - 🐞 修复 with沙箱下子应用重写`history.pushState`、`history.replaceState`失败的问题，[issue 1210](https://github.com/micro-zoe/micro-app/issues/1210)。
+
+
+### 1.0.0-rc.7
+
+`2024-8-20`
+
+- **Bug Fix**
+  - 🐞 修复 vue3子应用初始化时，`createWebHistory()`参数为空导致默认页面跳转异常的问题，[issue 1317](https://github.com/micro-zoe/micro-app/issues/1317)、[issue 1318](https://github.com/micro-zoe/micro-app/issues/1318)、[issue 1335](https://github.com/micro-zoe/micro-app/issues/1335)。
+
+- **Update**
+  - 🚀 更新 内存优化相关文档。
+
+
+### 1.0.0-rc.6
+
+`2024-7-29`
+
+- **Bug Fix**
+  - 🐞 修复 iframe沙箱下history.go传入的是非0数字时iframe被重置导致异常的问题，[PR 1112](https://github.com/micro-zoe/micro-app/pull/1112) by [keuby](https://github.com/keuby)。
+  - 🐞 修复 iframe沙箱下子应用事件类型判断异常的问题，[issue 975](https://github.com/micro-zoe/micro-app/issues/975)，[issue 1120](https://github.com/micro-zoe/micro-app/issues/1120)，[PR 985](https://github.com/micro-zoe/micro-app/pull/985) by [keuby](https://github.com/keuby)。
+  - 🐞 修复 UnoCSS等异步注册mount、unmount场景下导致umd模式加载失败的问题，[issue 881](https://github.com/micro-zoe/micro-app/issues/881)、[issue 1047](https://github.com/micro-zoe/micro-app/issues/1047)、[issue 1179](https://github.com/micro-zoe/micro-app/issues/1179)、[issue 1218](https://github.com/micro-zoe/micro-app/issues/1218)。
+  - 🐞 修复 类型声明jsx.IntrinsicElements导致vue-ts部分元素lint异常的问题。
+  - 🐞 修复 state路由模式下子应用为vue3时刷新浏览器路由状态丢失的问题。
+  - 🐞 修复 iframe沙箱在默认模式下二次渲染时初始化沙箱过程中卸载子应用导致异常的问题。
+  - 🐞 修复 当子应用的`window.unmount`非空且不为函数时卸载子应用报错的问题。
+  - 🐞 修复 当子应用在开启预渲染后，加载资源过程中被卸载表现异常的问题。
+  - 🐞 修复 fiber子应用在初始化过程中被卸载导致渲染异常的问题。
+  - 🐞 修复 主应用和子应用都是vue-router@4.x时，跳转子应用后点击返回按钮浏览器地址错误的问题，[issue 1234](https://github.com/micro-zoe/micro-app/issues/1234)。
+  - 🐞 修复 子应用beforeunload事件无法正常挂载的问题，[issue 1233](https://github.com/micro-zoe/micro-app/issues/1233)。
+  - 🐞 修复 当官网文档页面内容含有tab时，跳转或刷新后标题锚点定为不准确的问题。
+  - 🐞 修复 循环嵌套时，中间层子应用为iframe沙箱时通过data属性传递初始化数据失败的问题。
+  - 🐞 修复 native路由模式下vue3按需加载页面在部分场景下点击浏览器前进后退按钮时浏览器地址错误。
+  - 🐞 修复 svg中图片路径无法自动补全的问题，[issue 1222](https://github.com/micro-zoe/micro-app/issues/1222)。
+  - 🐞 修复 Firefox浏览器下子应用`favicon.ico`将主应用图标替换的问题，[issue 1262](https://github.com/micro-zoe/micro-app/issues/1262)。
+  - 🐞 修复 Firefox浏览器下子应用元素的`ownerDocument`指向异常导致React16子应用渲染失败的问题。
+  - 🐞 修复 Firefox浏览器下子应用元素的原型链被重置导致子应用渲染异常的的问题，[issue 1089](https://github.com/micro-zoe/micro-app/issues/1089)、[issue 913](https://github.com/micro-zoe/micro-app/issues/913)。
+  - 🐞 修复 iframe沙箱下`message`事件无法被触发的问题。
+  - 🐞 修复 iframe沙箱下window和document通过`dispatchEvent`主动发送某些特殊事件时无法正常触发事件的问题。
+  - 🐞 修复 iframe沙箱下`DOMParser`解析失败导致`AntV X6`, `docx-preview`等库运行异常的问题，[issue 1292](https://github.com/micro-zoe/micro-app/issues/1292)。
+  - 🐞 修复 iframe沙箱下主应用元素被错误插入到子应用中的情况，[issue 1260](https://github.com/micro-zoe/micro-app/issues/1260)。
+  - 🐞 修复 iframe沙箱下富文本编辑器表现异常的问题，[issue 1031](https://github.com/micro-zoe/micro-app/issues/1031)、[issue 1231](https://github.com/micro-zoe/micro-app/issues/1231)、[issue 1023](https://github.com/micro-zoe/micro-app/issues/1203)。
+  - 🐞 修复 Fragment内部link、script等元素无法拦截和处理的问题。
+  - 🐞 修复 iframe沙箱下通过`document.querySelector`、`document.querySelectorAll`获取script元素异常的问题。
+  - 🐞 修复 样式隔离对CSS规则`@layer`的支持，[PR 1303](https://github.com/micro-zoe/micro-app/pull/1303) by [alexgofreight](https://github.com/alexgofreight)。
+  - 🐞 修复 子应用存在多层CSS嵌套时样式隔离解析失败的问题，[PR 1300](https://github.com/micro-zoe/micro-app/pull/1300)、[PR 1298](https://github.com/micro-zoe/micro-app/pull/1298) by [alexgofreight](https://github.com/alexgofreight)。
+
+- **Update**
+  - 🚀 优化 `removeDomScope`方法，支持解除元素绑定的开关操作。
+  - 🚀 优化 沙箱架构设计。
+  - 🚀 优化 子应用卸载行为逻辑。
+  - 🚀 优化 路由相关文档。
+
 
 ### 1.0.0-rc.5
 
-`2024-2-29`
+`2024-4-29`
 
 - **New**
-
   - 🆕 新增虚拟路由系统`state`模式，用于适配更多使用场景。
 
 - **Bug Fix**
-
   - 🐞 修复了iframe沙箱下`unhandledrejection`事件失效的问题，[issue 1102](https://github.com/micro-zoe/micro-app/issues/1102)、[issue 1159](https://github.com/micro-zoe/micro-app/issues/1159)。
   - 🐞 修复了with沙箱下`keep-alive`子应用二次渲染后无法通过`microApp.router`控制跳转的问题，[issue 1115](https://github.com/micro-zoe/micro-app/issues/1115)。
   - 🐞 修复了with沙箱下预渲染子应用路由跳转异常的问题。
@@ -26,9 +141,13 @@
   - 🐞 修复了iframe沙箱下`Aliplayer`视频播放器无法正常运行的问题。
   - 🐞 修复了`native`、`disable-memory-router`路由模式下，主应用、子应用都是vue3导致路由冲突导航异常的问题，[issue 1148](https://github.com/micro-zoe/micro-app/issues/1148)、[issue 1132](https://github.com/micro-zoe/micro-app/issues/1132)。
   - 🐞 修复了格式化子应用url导致部分场景下路由匹配异常的问题，[issue 1147](https://github.com/micro-zoe/micro-app/issues/1147)。
+  - 🐞 修复了with沙箱下生命周期`mounted`, `unmount`重复触发的问题，[issue 1161](https://github.com/micro-zoe/micro-app/issues/1161)。
+  - 🐞 修复了域名中包含.js导致子应用渲染失败的问题，[issue 1172](https://github.com/micro-zoe/micro-app/issues/1172)，[PR 1173](https://github.com/micro-zoe/micro-app/pull/1173) by [SepVeneto](https://github.com/SepVeneto)。
+  - 🐞 修复了iframe沙箱下子应用设置`history.scrollRestoration`不生效的问题。
+  - 🐞 修复了虚拟路由系统pure模式下，通过location进行跳转表现异常的问题，[issue 1135](https://github.com/micro-zoe/micro-app/issues/1135)。
 
 - **Update**
-
+  - 🚀 优化了生命周期全局监听函数的传递参数。
   - 🚀 更新了路由相关文档。
 
 
@@ -37,7 +156,6 @@
 `2024-1-31`
 
 - **New**
-
   - 🆕 新增全局配置`iframeSrc`，用于动态设置iframe沙箱的src地址。
   - 🆕 新增micro-app元素公有变量`publicPath`、`baseRoute`，用于支持chrome插件，[PR 1052](https://github.com/micro-zoe/micro-app/pull/1052) by [raoenhui](https://github.com/raoenhui)。
   - 🆕 新增了在iframe沙箱下对`Document.prototype.createElementNS`、`Document.prototype.createDocumentFragment`的拦截和处理。
@@ -45,7 +163,6 @@
   - 🆕 新增了with沙箱对于`Document.prototype.createElementNS`的直接处理，规避可能存在的元素泄漏风险。
 
 - **Bug Fix**
-
   - 🐞 修复了父应用非根目录下微应用无法正常渲染的问题，[PR 1037](https://github.com/micro-zoe/micro-app/pull/1037) by [xuhongbo](https://github.com/xuhongbo)。
   - 🐞 修复了iframe沙箱下antd `Dropdown`、`Tooltip`等组件渲染异常的问题，[PR 1015](https://github.com/micro-zoe/micro-app/pull/1015) by [keuby](https://github.com/keuby)。
   - 🐞 修复了micro-app url属性为相对地址时没有自动补全导致子应用渲染失败的问题，[PR 1056](https://github.com/micro-zoe/micro-app/pull/1056)。
@@ -96,13 +213,11 @@
 `2023-10-30`
 
 - **New**
-
   - 🆕 新增了子应用全局变量`__MICRO_APP_STATE__`，用于标记当前应用的状态。
   - 🆕 新增了子应用document变量`__MICRO_APP_NAME__`，用于标记document所属应用。
   - 🆕 重写了原型方法`Node.prototype.parentNode`，用于处理特殊元素parentNode的指向问题。
 
 - **Bug Fix**
-
   - 🐞 修复了在iframe沙箱下循环嵌套的问题。
   - 🐞 修复了在iframe沙箱下开启`inline`模式导致通过`getElementsByTagName`获取script元素失败的问题。
 
@@ -579,7 +694,7 @@
 
 - **Bug Fix**
 
-  - 🐞 修复了在火狐浏览器80及以上版本中，样式隔离执行速度过慢的问题。
+  - 🐞 修复了在Firefox浏览器80及以上版本中，样式隔离执行速度过慢的问题。
 
 
 ### 0.8.3

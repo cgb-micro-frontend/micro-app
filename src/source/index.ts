@@ -95,7 +95,7 @@ export function extractSourceDom (htmlStr: string, app: AppInterface): void {
   flatChildren(wrapElement, app, microAppHead, fiberStyleTasks)
 
   /**
-   * Style and link are parallel, because it takes a lot of time for link to request resources. During this period, style processing can be performed to improve efficiency.
+   * Style and link are parallel, as it takes a lot of time for link to request resources. During this period, style processing can be performed to improve efficiency.
    */
   const fiberStyleResult = serialExecFiberTasks(fiberStyleTasks)
 

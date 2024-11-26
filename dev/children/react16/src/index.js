@@ -8,19 +8,26 @@ import './ant-custom.css'; // 自定义antd class前缀
 import './index.css';
 import Router from './router';
 import { Modal, notification, ConfigProvider } from 'antd';
-import subMicroApp from '@micro-zoe/micro-app';
+import microApp from '@micro-zoe/micro-app';
 // import './flexible';
 // import '@alifd/next/dist/next.css';
 // import { atan2 } from 'mathjs' // 卡死
+// import './setImmediate.js'
 
 // 循环内嵌
-subMicroApp.start({
-  tagName: 'micro-app-sub'
+microApp.start({
+  tagName: 'micro-app-react16'
 })
 
 ConfigProvider.config({
   prefixCls: 'react16',
 })
+
+console.log('react16 通过 window.microApp.getData 获取的初始化数据：', window.microApp?.getData())
+
+// window.setImmediate(function () {
+//   alert(11111111)
+// })
 
 // 数据监听
 window.microApp?.addDataListener((data) => {
@@ -71,6 +78,7 @@ window.addEventListener('appstate-change', function (e) {
 // // 注册unmount函数，卸载时会自动执行
 // window.unmount = () => {
 //   ReactDOM.unmountComponentAtNode(document.getElementById('root'));
+//   // window.microApp.
 //   console.log('微应用react16卸载了 -- 默认模式');
 // }
 
@@ -124,10 +132,10 @@ window.onunmount = () => {
 //   // console.log(this)
 // }, false)
 
-// document.onclick = function () {
-//   console.log(`子应用${window.__MICRO_APP_NAME__}内部的document.onclick绑定`)
-//   // console.log(this)
-// }
+document.onclick = function () {
+  console.log(`子应用${window.__MICRO_APP_NAME__}内部的document.onclick绑定`)
+  // console.log(this)
+}
 
 // window.addEventListener('click', function () {
 //   console.log(`子应用${window.__MICRO_APP_NAME__}内部的window.addEventListener绑定`)
@@ -373,8 +381,8 @@ if (window.__MICRO_APP_ENVIRONMENT__) {
   // Vue是系统默认绑定变量
   console.assert(window.Vue === undefined, 'window.Vue 应该为false')
   console.assert(('Vue' in window) === false, 'Vue in window 应该为false')
-  window.Vue = '自定义Vue'
-  console.assert(window.Vue === '自定义Vue', 'window.Vue 应该为自定义Vue')
+  window.Vue = '子应用内部自定义Vue'
+  console.assert(window.Vue === '子应用内部自定义Vue', 'window.Vue 应该为子应用内部自定义Vue')
 
   // ----------------------- scope相关---------------------结束
 
@@ -393,27 +401,28 @@ if (window.__MICRO_APP_ENVIRONMENT__) {
 }
 
 /* ---------------------- pureCreateElement & removeDomScope --------------------- */
-if (window.__MICRO_APP_ENVIRONMENT__) {
-  // const unBoundDom1 = window.microApp.pureCreateElement('div')
-  // unBoundDom1.innerHTML = 'unBoundDom1'
-  // document.body.appendChild(unBoundDom1)
+// if (window.__MICRO_APP_ENVIRONMENT__) {
+//   // pureCreateElement创建的元素无法拦截，插入到主应用body中
+//   const unBoundDom1 = window.microApp.pureCreateElement('div')
+//   unBoundDom1.innerHTML = 'unBoundDom1'
+//   document.body.appendChild(unBoundDom1)
 
-  // /**
-  //  * !!!! 注意removeDomScope(true)是异步清空的，这里会导致一个问题
-  //  * 执行removeDomScope(true)后再执行window.mount方法，会导致子应用初始化失败
-  //  */
-  // window.microApp.removeDomScope(true)
-  // const unBoundDom2 = window.document.createElement('div')
-  // unBoundDom2.innerHTML = 'unBoundDom2'
-  // document.body.appendChild(unBoundDom2)
+//   // 解除元素绑定，unBoundDom2插入到主应用body中
+//   window.microApp.removeDomScope(true) // 解除元素绑定
+//   const unBoundDom2 = window.document.createElement('div')
+//   unBoundDom2.innerHTML = 'unBoundDom2'
+//   document.body.appendChild(unBoundDom2)
+//   window.microApp.removeDomScope(false) // 恢复元素绑定
 
-  // const unBoundDom3 = window.rawDocument.createElement('div')
-  // unBoundDom3.innerHTML = 'unBoundDom3'
-  // document.body.appendChild(unBoundDom3)
+//   // 元素绑定已经恢复，unBoundDom3插入到子应用 micro-app-body中
+//   const unBoundDom3 = window.rawDocument.createElement('div')
+//   unBoundDom3.innerHTML = 'unBoundDom3'
+//   document.body.appendChild(unBoundDom3)
 
-  // const dynamicSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  // document.body.appendChild(dynamicSvg)
-}
+//   // 插入子应用 micro-app-body中
+//   const dynamicSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+//   document.body.appendChild(dynamicSvg)
+// }
 
 
 /* ---------------------- 获取原生window 和 document --------------------- */
@@ -429,36 +438,36 @@ if (window.__MICRO_APP_ENVIRONMENT__) {
 /* ---------------------- location 相关 --------------------- */
 // 获取location信息
 if (window.__MICRO_APP_ENVIRONMENT__) {
-  console.log(`${window.__MICRO_APP_NAME__} location.href`, location.href, window.rawWindow.location.href)
-  console.log(`${window.__MICRO_APP_NAME__} location.origin`, location.origin, window.rawWindow.location.origin)
-  console.log(`${window.__MICRO_APP_NAME__} location.host`, location.host, window.rawWindow.location.host)
-  console.log(`${window.__MICRO_APP_NAME__} location.hostname`, location.hostname, window.rawWindow.location.hostname)
-  console.log(`${window.__MICRO_APP_NAME__} location.port`, location.port, window.rawWindow.location.port)
-  console.log(`${window.__MICRO_APP_NAME__} location.protocol`, location.protocol, window.rawWindow.location.protocol)
-  console.log(`${window.__MICRO_APP_NAME__} location.pathname`, location.pathname, window.rawWindow.location.pathname)
-  console.log(`${window.__MICRO_APP_NAME__} location.hash`, location.hash, window.rawWindow.location.hash)
-  console.log(`${window.__MICRO_APP_NAME__} location.search`, location.search, window.rawWindow.location.search)
+  // console.log(`${window.__MICRO_APP_NAME__} location.href`, location.href, window.rawWindow.location.href)
+  // console.log(`${window.__MICRO_APP_NAME__} location.origin`, location.origin, window.rawWindow.location.origin)
+  // console.log(`${window.__MICRO_APP_NAME__} location.host`, location.host, window.rawWindow.location.host)
+  // console.log(`${window.__MICRO_APP_NAME__} location.hostname`, location.hostname, window.rawWindow.location.hostname)
+  // console.log(`${window.__MICRO_APP_NAME__} location.port`, location.port, window.rawWindow.location.port)
+  // console.log(`${window.__MICRO_APP_NAME__} location.protocol`, location.protocol, window.rawWindow.location.protocol)
+  // console.log(`${window.__MICRO_APP_NAME__} location.pathname`, location.pathname, window.rawWindow.location.pathname)
+  // console.log(`${window.__MICRO_APP_NAME__} location.hash`, location.hash, window.rawWindow.location.hash)
+  // console.log(`${window.__MICRO_APP_NAME__} location.search`, location.search, window.rawWindow.location.search)
 
   // 依次放开每个注释来，尽可能覆盖所有场景
   setTimeout(() => {
     // window.location.href = 'https://www.baidu.com/' // origin不同，直接跳转页面
     // window.location.href = 'http://localhost:3001/micro-app/react16/page2' // path改变，刷新浏览器
-    // window.location.href = 'http://localhost:3001/micro-app/react16/page2#abc' // path不变，hash改变，不刷新浏览器，发送popstate、hashchange事件
+    // window.location.href = 'http://localhost:3001/micro-app/react16/page2#abc11' // path不变，hash改变，不刷新浏览器，发送popstate、hashchange事件
     // window.location.href = 'http://localhost:3001/micro-app/react16/page2/' // hash从有到无，刷新浏览器
-    // window.location.href = 'http://localhost:3001/micro-app/react16'
+    // window.location.href = 'http://localhost:3001/micro-app/react16' // 跳转首页，刷新浏览器
     // window.location.href = 'http://localhost:3001/micro-app/react16/' // path相同，刷新浏览器
     // window.location.href = 'http://localhost:3001/micro-app/react16/?a=1' // search变化，刷新浏览器
 
 
     // window.location.pathname = '/micro-app/react16/page2' // path改变，刷新浏览器
     // window.location.pathname = '/micro-app/react16/page2#hash1' // 无法直接通过pathname修改hash的值，这里的写法是错误的，而且会导致浏览器刷新，需要完善一下
-    // window.location.pathname = '/micro-app/react16/page2?b=2'
+    // window.location.pathname = '/micro-app/react16/page2?b=2' // 刷新页面，但问题是多次刷新?b=2会不断拼接
 
     // window.location.search = '?c=3' // search改变，刷新浏览器
     // window.location.search = '?c=3' // search不变，刷新浏览器
 
-    // window.location.hash = '#a' // hash改变，不刷新浏览器
-    // window.location.hash = '#a' // hash不变，不刷新浏览器
+    // window.location.hash = '#a' // hash改变，不刷新浏览器，发送popstate、hashchange事件
+    // window.location.hash = '#a' // hash不变，不刷新浏览器，不发送事件
 
 
     // window.location.assign('http://localhost:3001/micro-app/react16/page2') // path改变，刷新浏览器
@@ -466,9 +475,8 @@ if (window.__MICRO_APP_ENVIRONMENT__) {
 
     // window.location.replace('http://localhost:3001/micro-app/react16/page2') // 同上
     // window.location.replace('http://localhost:3001/micro-app/react16/page2#abc') // 同上
-    // console.log(111111, window.location)
 
-    // window.history.scrollRestoration = 'manual'
+    window.history.scrollRestoration = 'manual'
   }, 5000);
 }
 
@@ -561,3 +569,49 @@ console.log('micro-app容器元素document.microAppElement', document.microAppEl
 // new Promise((resolve, reject) => {
 //   throw 'promise 逃逸的错误'
 // })
+
+/* ---------------------- 测试iframe document.body/head 获取元素 --------------------- */
+// if (window.__MICRO_APP_ENVIRONMENT__) {
+//   setTimeout(() => {
+//     // 场景1 querySelector: 不设置appName导致查询元素无法被拦截到子应用内部
+//     console.log(`document.body.querySelector('#root') ==>`, document.body.querySelector('#root'))
+//     // console.log(`获取子应用root元素 -- document.querySelector`, document.querySelector('body').querySelector('#root'))
+//     console.log(`document.body.querySelector('script') ==>`, document.body.querySelector('script'))
+//     console.log(`document.head.querySelector('script') ==>`, document.head.querySelector('script'))
+
+//     // 场景2 querySelectorAll: 不设置appName导致查询元素无法被拦截到子应用内部
+//     console.log(`document.body.querySelectorAll('#root') ==>`, document.body.querySelectorAll('#root'))
+//     // console.log(`document.querySelector('body').querySelectorAll('#root') ==>`, document.querySelector('body').querySelectorAll('#root'))
+//     console.log(`document.body.querySelectorAll('script') ==>`, document.body.querySelectorAll('script'))
+//     console.log(`document.head.querySelectorAll('script') ==>`, document.head.querySelectorAll('script'))
+
+//     console.log(`document.querySelector('script') ==>`, document.querySelector('script'))
+//     console.log(`document.querySelectorAll('script') ==>`, document.querySelectorAll('script'))
+
+//     console.log(`document.getElementsByTagName('head')[0].querySelector('script') ==>`, document.getElementsByTagName('head')[0].querySelector('script'))
+//     console.log(`document.querySelector('body').querySelectorAll('script') ==>`, document.querySelector('body').querySelectorAll('script'))
+
+
+//     // 场景2：设置appName导致基座元素插入子应用
+//     // window.microApp.removeDomScope(true)
+//     window.rawWindow.insertNodeFromBaseApp() // 调用主应用方法插入元素
+//     // window.microApp.removeDomScope(false)
+//   }, 1000);
+// }
+
+/* ---------------------- 测试 DocumentFragment --------------------- */
+// if (window.__MICRO_APP_ENVIRONMENT__) {
+//   setTimeout(() => {
+//     // window.microApp.removeDomScope(true)
+//     const a = document.createDocumentFragment()
+//     const b = document.createElement('script')
+//     // const b = window.microApp.pureCreateElement('script')
+//     b.src = 'http://127.0.0.1:8080/js/test.js'
+//     // a.appendChild(b)
+//     // a.append(b)
+//     a.prepend(b)
+//     // Element.prototype.appendChild.call(a, b)
+//     document.body.prepend(a)
+//     // window.microApp.removeDomScope(false)
+//   }, 1000);
+// }

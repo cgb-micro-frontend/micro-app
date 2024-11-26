@@ -1,7 +1,7 @@
 /* eslint-disable no-new */
 import type {
   AttrType,
-  MicroAppElementType,
+  MicroAppElementInterface,
   AppInterface,
   OptionsType,
   NormalKey,
@@ -22,7 +22,6 @@ import {
   createURL,
   isPlainObject,
   getEffectivePath,
-  getBaseHTMLElement,
 } from './libs/utils'
 import {
   ObservedAttrName,
@@ -43,7 +42,7 @@ import {
  * @param tagName element name
 */
 export function defineElement (tagName: string): void {
-  class MicroAppElement extends getBaseHTMLElement() implements MicroAppElementType {
+  class MicroAppElement extends HTMLElement implements MicroAppElementInterface {
     static get observedAttributes (): string[] {
       return ['name', 'url']
     }
@@ -69,6 +68,13 @@ export function defineElement (tagName: string): void {
     // keep-alive: open keep-alive mode
 
     public connectedCallback (): void {
+      /**
+       * In FireFox, iframe Node.prototype will point to native Node.prototype after insert to document
+       * If <micro-app>.prototype is not MicroAppElement.prototype, we should reset it
+       */
+      if (Object.getPrototypeOf(this) !== MicroAppElement.prototype) {
+        Object.setPrototypeOf(this, MicroAppElement.prototype)
+      }
       const cacheCount = ++this.connectedCount
       this.connectStateMap.set(cacheCount, true)
       /**
@@ -141,7 +147,7 @@ export function defineElement (tagName: string): void {
         if (
           attr === ObservedAttrName.URL && (
             !this.appUrl ||
-            !this.connectStateMap.get(this.connectedCount) // TODO: 这里的逻辑可否再优化一下
+            !this.connectStateMap.get(this.connectedCount)
           )
         ) {
           newVal = formatAppURL(newVal, this.appName)
@@ -153,7 +159,7 @@ export function defineElement (tagName: string): void {
         } else if (
           attr === ObservedAttrName.NAME && (
             !this.appName ||
-            !this.connectStateMap.get(this.connectedCount) // TODO: 这里的逻辑可否再优化一下
+            !this.connectStateMap.get(this.connectedCount)
           )
         ) {
           const formatNewName = formatAppName(newVal)
@@ -162,7 +168,6 @@ export function defineElement (tagName: string): void {
             return logError(`Invalid attribute name ${newVal}`, this.appName)
           }
 
-          // TODO: 当micro-app还未插入文档中就修改name，逻辑可否再优化一下
           if (this.cacheData) {
             microApp.setData(formatNewName, this.cacheData)
             this.cacheData = null
@@ -587,6 +592,18 @@ export function defineElement (tagName: string): void {
     }
 
     /**
+     * get delay time of router event
+     * @returns delay time
+     */
+    public getRouterEventDelay (): number {
+      let delay = parseInt(this.getAttribute('router-event-delay') as string)
+      if (isNaN(delay)) {
+        delay = parseInt((isFunction(microApp.options['router-event-delay']) ? microApp.options['router-event-delay'](this.appName) : microApp.options['router-event-delay']) as unknown as string)
+      }
+      return !isNaN(delay) ? delay : 0
+    }
+
+    /**
      * Data from the base application
      */
     set data (value: Record<PropertyKey, unknown> | null) {
@@ -624,5 +641,5 @@ export function defineElement (tagName: string): void {
     }
   }
 
-  globalEnv.rawWindow.customElements.define(tagName, MicroAppElement)
+  window.customElements.define(tagName, MicroAppElement)
 }

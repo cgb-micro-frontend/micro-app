@@ -21,6 +21,7 @@ import {
   rawHasOwnProperty,
   removeDomScope,
   getRootContainer,
+  formatEventType,
 } from '../../libs/utils'
 import {
   appInstanceMap,
@@ -250,6 +251,7 @@ function patchWindowEffect (microAppWindow: microAppWindowType, appName: string)
     listener: MicroEventListener,
     options?: boolean | AddEventListenerOptions,
   ): void {
+    type = formatEventType(type, appName)
     const listenerList = eventListenerMap.get(type)
     if (listenerList) {
       listenerList.add(listener)
@@ -265,6 +267,7 @@ function patchWindowEffect (microAppWindow: microAppWindowType, appName: string)
     listener: MicroEventListener,
     options?: boolean | AddEventListenerOptions,
   ): void {
+    type = formatEventType(type, appName)
     const listenerList = eventListenerMap.get(type)
     if (listenerList?.size && listenerList.has(listener)) {
       listenerList.delete(listener)

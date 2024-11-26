@@ -524,7 +524,7 @@ export function runScript (
        */
       if (!replaceElement) {
         // TEST IGNORE
-        const parent = app.iframe ? app.sandBox!.microBody : app.querySelector('micro-app-body')
+        const parent = app.iframe ? app.sandBox?.microBody : app.querySelector('micro-app-body')
         parent?.appendChild(scriptElement)
       }
     } else {
@@ -550,7 +550,7 @@ export function runDynamicRemoteScript (
   scriptInfo: ScriptSourceInfo,
   originScript: HTMLScriptElement,
 ): HTMLScriptElement | Comment {
-  const replaceElement = isInlineMode(app, scriptInfo) ? pureCreateElement('script') : document.createComment('dynamic script extract by micro-app')
+  const replaceElement = isInlineMode(app, scriptInfo) ? pureCreateElement('script') : document.createComment(`dynamic script with src='${address}' extract by micro-app`)
 
   const dispatchScriptOnLoadEvent = () => dispatchOnLoadEvent(originScript)
 
@@ -594,7 +594,7 @@ export function runDynamicInlineScript (
   app: AppInterface,
   scriptInfo: ScriptSourceInfo,
 ): HTMLScriptElement | Comment {
-  const replaceElement = isInlineMode(app, scriptInfo) ? pureCreateElement('script') : document.createComment('dynamic script extract by micro-app')
+  const replaceElement = isInlineMode(app, scriptInfo) ? pureCreateElement('script') : document.createComment('dynamic inline script extract by micro-app')
 
   runScript(address, app, scriptInfo, void 0, replaceElement as HTMLScriptElement)
 

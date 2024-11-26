@@ -20,6 +20,11 @@ const routes = [
     name: 'table',
     component: () => import(/* webpackChunkName: "table" */ './pages/table.vue'),
   },
+  {
+    path: '/nest',
+    name: 'nest',
+    component: () => import(/* webpackChunkName: "nest" */ './pages/nest.vue'),
+  },
 ];
 
 export default routes;

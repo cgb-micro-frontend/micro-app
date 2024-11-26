@@ -23,8 +23,9 @@
         @datachange='handleDataChange'
         inline
         baseRoute='/react16'
+        iframe
       >
-      <!-- destroy  inline -->
+      <!-- destroy inline iframe -->
       </micro-app>
     </div>
   </div>

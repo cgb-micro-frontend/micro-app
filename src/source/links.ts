@@ -96,7 +96,7 @@ export function extractLinkFromHtml (
     } else {
       return { address: href, linkInfo }
     }
-  } else if (rel && ['prefetch', 'preload', 'prerender', 'modulepreload'].includes(rel)) {
+  } else if (rel && ['prefetch', 'preload', 'prerender', 'modulepreload', 'icon'].includes(rel)) {
     // preload prefetch prerender ....
     if (isDynamic) {
       replaceComment = document.createComment(`link element with rel=${rel}${href ? ' & href=' + href : ''} removed by micro-app`)

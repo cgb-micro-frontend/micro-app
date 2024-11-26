@@ -1,5 +1,4 @@
 import type {
-  AppInterface,
   RequestIdleCallbackInfo,
   RequestIdleCallbackOptions,
 } from '@micro-app/types'
@@ -12,6 +11,9 @@ import {
 import {
   rejectMicroAppStyle,
 } from '../source/patch'
+import {
+  updateElementInfo,
+} from '../sandbox/adapter'
 
 declare global {
   interface Node {
@@ -26,12 +28,6 @@ declare global {
     __MICRO_APP_HAS_SCOPED__?: boolean
   }
 
-  interface HTMLElement {
-    reload(destroy?: boolean): Promise<boolean>
-    mount(app: AppInterface): void
-    unmount (destroy?: boolean, unmountcb?: CallableFunction): void
-  }
-
   interface Window {
     requestIdleCallback (
       callback: (info: RequestIdleCallbackInfo) => void,
@@ -43,13 +39,8 @@ declare global {
     __MICRO_APP_BASE_APPLICATION__?: boolean
     __REACT_ERROR_OVERLAY_GLOBAL_HOOK__: boolean
     rawLocation: Location
-    rawWindow: Window
-    rawDocument: Document
-    Document: any
-    Element: any,
-    Node: any,
-    EventTarget: any,
-    HTMLElement: HTMLElement,
+    rawWindow: any
+    rawDocument: any
   }
 }
 
@@ -70,16 +61,19 @@ export function initGlobalEnv (): void {
     const rawRootElement = rawWindow.Element
     const rawRootNode = rawWindow.Node
     const rawRootEventTarget = rawWindow.EventTarget
+    const rawDocumentFragment = rawWindow.DocumentFragment
 
     // save patch raw methods, pay attention to this binding
+    const rawAppendChild = rawRootNode.prototype.appendChild
+    const rawInsertBefore = rawRootNode.prototype.insertBefore
+    const rawReplaceChild = rawRootNode.prototype.replaceChild
+    const rawRemoveChild = rawRootNode.prototype.removeChild
     const rawSetAttribute = rawRootElement.prototype.setAttribute
-    const rawAppendChild = rawRootElement.prototype.appendChild
-    const rawInsertBefore = rawRootElement.prototype.insertBefore
-    const rawReplaceChild = rawRootElement.prototype.replaceChild
-    const rawRemoveChild = rawRootElement.prototype.removeChild
     const rawAppend = rawRootElement.prototype.append
     const rawPrepend = rawRootElement.prototype.prepend
-    const rawCloneNode = rawRootElement.prototype.cloneNode
+    const rawFragmentAppend = rawDocumentFragment.prototype.append
+    const rawFragmentPrepend = rawDocumentFragment.prototype.prepend
+    const rawCloneNode = rawRootNode.prototype.cloneNode
     const rawElementQuerySelector = rawRootElement.prototype.querySelector
     const rawElementQuerySelectorAll = rawRootElement.prototype.querySelectorAll
     const rawInsertAdjacentElement = rawRootElement.prototype.insertAdjacentElement
@@ -99,12 +93,10 @@ export function initGlobalEnv (): void {
     const rawGetElementsByTagName = rawRootDocument.prototype.getElementsByTagName
     const rawGetElementsByName = rawRootDocument.prototype.getElementsByName
 
-    const ImageProxy = new Proxy(Image, {
+    // TODO: 将ImageProxy移出去
+    const ImageProxy = new Proxy(rawWindow.Image, {
       construct (Target, args): HTMLImageElement {
-        const elementImage = new Target(...args)
-        const currentAppName = getCurrentAppName()
-        if (currentAppName) elementImage.__MICRO_APP_NAME__ = currentAppName
-        return elementImage
+        return updateElementInfo(new Target(...args), getCurrentAppName())
       },
     })
 
@@ -134,6 +126,7 @@ export function initGlobalEnv (): void {
       rawRootDocument,
       rawRootElement,
       rawRootNode,
+      rawDocumentFragment,
 
       // source/patch
       rawSetAttribute,
@@ -143,6 +136,8 @@ export function initGlobalEnv (): void {
       rawRemoveChild,
       rawAppend,
       rawPrepend,
+      rawFragmentAppend,
+      rawFragmentPrepend,
       rawCloneNode,
       rawElementQuerySelector,
       rawElementQuerySelectorAll,

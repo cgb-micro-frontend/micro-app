@@ -7,13 +7,22 @@ import {
   defer,
   isNode,
   rawDefineProperties,
+  isMicroAppBody,
+  getPreventSetState,
+  throttleDeferForIframeAppName,
+  isAnchorElement,
 } from '../libs/utils'
 import {
   appInstanceMap,
+  isIframeSandbox,
 } from '../create_app'
+import microApp from '../micro_app'
+import { AppManager } from '../app_manager'
 
 export class BaseSandbox implements BaseSandboxType {
-  constructor () {
+  constructor (appName: string, url: string) {
+    this.appName = appName
+    this.url = url
     this.injectReactHMRProperty()
   }
 
@@ -38,6 +47,8 @@ export class BaseSandbox implements BaseSandboxType {
     'onhashchange',
   ]
 
+  public appName: string
+  public url: string
   // Properties that can only get and set in microAppWindow, will not escape to rawWindow
   public scopeProperties: PropertyKey[] = Array.from(this.staticScopeProperties)
   // Properties that can be escape to rawWindow
@@ -48,6 +59,8 @@ export class BaseSandbox implements BaseSandboxType {
   public escapeKeys = new Set<PropertyKey>()
   // Promise used to mark whether the sandbox is initialized
   public sandboxReady!: Promise<void>
+  // reset mount, unmount when stop in default mode
+  public clearHijackUmdHooks!: () => void
 
   // adapter for react
   private injectReactHMRProperty (): void {
@@ -100,16 +113,17 @@ export function fixReactHMRConflict (app: AppInterface): void {
  * @param container target dom
  * @param appName app name
  */
-export function patchElementTree (container: Element | ShadowRoot, appName: string): void {
-  const children = Array.from(container.children)
+export function patchElementTree (
+  container: Node,
+  appName: string,
+): void {
+  const children = Array.from(container.childNodes)
 
   children.length && children.forEach((child) => {
     patchElementTree(child, appName)
   })
 
-  for (const child of children) {
-    updateElementInfo(child, appName)
-  }
+  updateElementInfo(container, appName)
 }
 
 /**
@@ -118,33 +132,126 @@ export function patchElementTree (container: Element | ShadowRoot, appName: stri
  * @param appName app name
  * @returns target node
  */
-export function updateElementInfo <T> (node: T, appName: string): T {
-  const proxyWindow = appInstanceMap.get(appName)?.sandBox?.proxyWindow
+export function updateElementInfo <T> (node: T, appName: string | null): T {
   if (
+    appName &&
     isNode(node) &&
-    !node.__MICRO_APP_NAME__ &&
+    node.__MICRO_APP_NAME__ !== appName &&
     !node.__PURE_ELEMENT__ &&
-    proxyWindow
+    !getPreventSetState()
   ) {
     /**
      * TODO:
      *  1. 测试baseURI和ownerDocument在with沙箱中是否正确
      *    经过验证with沙箱不能重写ownerDocument，否则react点击事件会触发两次
-     *  2. with沙箱所有node设置__MICRO_APP_NAME__都使用updateElementInfo
     */
-    rawDefineProperties(node, {
-      baseURI: {
-        configurable: true,
-        // if disable-memory-router or router-mode='disable', href point to base app
-        get: () => proxyWindow.location.href,
-      },
+    const props: {[kye:string]:any} = {
       __MICRO_APP_NAME__: {
         configurable: true,
+        enumerable: true,
         writable: true,
         value: appName,
       },
-    })
+    }
+    if (isAnchorElement(node)) {
+      // a 标签
+      const microApp = AppManager.getInstance().get(appName)
+      if (microApp) {
+        props.href = {
+          get() {
+            return this.getAttribute('href')
+          },
+          set(value: string) {
+            if (value === undefined) {
+              return
+            }
+            this.setAttribute('href', value)
+          },
+        }
+      }
+    }
+    rawDefineProperties(node, props)
+
+    /**
+     * In FireFox, iframe Node.prototype will point to native Node.prototype after insert to document
+     *
+     * Performance:
+     *  iframe element.__proto__ === browser HTMLElement.prototype // Chrome: false, FireFox: true
+     *  iframe element.__proto__ === iframe HTMLElement.prototype // Chrome: true, FireFox: false
+     *
+     * NOTE:
+     *  1. Node.prototype.baseURI
+     *  2. Node.prototype.ownerDocument
+     *  3. Node.prototype.parentNode
+     *  4. Node.prototype.getRootNode
+     *  5. Node.prototype.cloneNode
+     *  6. Element.prototype.innerHTML
+     *  7. Image
+     */
+    if (isIframeSandbox(appName)) {
+      const proxyWindow = appInstanceMap.get(appName)?.sandBox?.proxyWindow
+      if (proxyWindow) {
+        rawDefineProperties(node, {
+          baseURI: {
+            configurable: true,
+            enumerable: true,
+            get: () => proxyWindow.location.href,
+          },
+          ownerDocument: {
+            configurable: true,
+            enumerable: true,
+            get: () => node !== proxyWindow.document ? proxyWindow.document : null,
+          },
+          parentNode: getIframeParentNodeDesc(
+            appName,
+            globalEnv.rawParentNodeDesc,
+          ),
+          getRootNode: {
+            configurable: true,
+            enumerable: true,
+            writable: true,
+            value: function getRootNode (): Node {
+              return proxyWindow.document
+            }
+          },
+        })
+      }
+    }
   }
 
   return node
+}
+
+/**
+ * get Descriptor of Node.prototype.parentNode for iframe
+ * @param appName app name
+ * @param parentNode parentNode Descriptor of iframe or browser
+ */
+export function getIframeParentNodeDesc (
+  appName: string,
+  parentNodeDesc: PropertyDescriptor,
+): PropertyDescriptor {
+  return {
+    configurable: true,
+    enumerable: true,
+    get (this: Node) {
+      throttleDeferForIframeAppName(appName)
+      const result: ParentNode = parentNodeDesc.get?.call(this)
+      /**
+       * If parentNode is <micro-app-body>, return rawDocument.body
+       * Scenes:
+       *  1. element-ui@2/lib/utils/vue-popper.js
+       *    if (this.popperElm.parentNode === document.body) ...
+       * e.g.:
+       *  1. element-ui@2.x el-dropdown
+       * WARNING:
+       *  Will it cause other problems ?
+       *  e.g. target.parentNode.remove(target)
+       */
+      if (isMicroAppBody(result) && appInstanceMap.get(appName)?.container) {
+        return microApp.options.getRootElementParentNode?.(this, appName) || globalEnv.rawDocument.body
+      }
+      return result
+    }
+  }
 }

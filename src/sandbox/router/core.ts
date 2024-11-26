@@ -1,6 +1,7 @@
 import type {
   MicroLocation,
   MicroState,
+  MicroRouterInfoState,
   LocationQuery,
   HandleMicroPathResult,
 } from '@micro-app/types'
@@ -13,6 +14,7 @@ import {
   isUndefined,
   isPlainObject,
   createURL,
+  isEmptyObject,
 } from '../../libs/utils'
 import {
   appInstanceMap,
@@ -30,19 +32,19 @@ import microApp from '../../micro_app'
 // set micro app state to origin state
 export function setMicroState (
   appName: string,
-  microState: MicroState,
-  microLocation: MicroLocation,
+  microState?: MicroState,
+  targetLocation?: MicroLocation,
 ): MicroState {
   // TODO: 验证native模式下修改state nextjs路由是否正常
   const rawState = globalEnv.rawWindow.history.state
-  const additionalState: Record<string, any> = {
+  const additionalState: Record<'__MICRO_APP_STATE__', Record<string, MicroRouterInfoState>> = {
     __MICRO_APP_STATE__: assign({}, rawState?.__MICRO_APP_STATE__, {
       [appName]: {
-        fullPath: microLocation.pathname + microLocation.search + microLocation.hash,
-        state: microState,
+        fullPath: targetLocation ? targetLocation.pathname + targetLocation.search + targetLocation.hash : null,
+        state: microState ?? null,
         mode: getRouterMode(appName),
       }
-    })
+    }),
   }
 
   // create new state object
@@ -60,13 +62,19 @@ export function removeMicroState (appName: string, rawState: MicroState): MicroS
     }
   }
 
-  return assign({}, rawState)
+  return !isEmptyObject(rawState) ? assign({}, rawState) : null
 }
 
 // get micro app state form origin state
 export function getMicroState (appName: string): MicroState {
   const rawState = globalEnv.rawWindow.history.state
-  return rawState?.__MICRO_APP_STATE__?.[appName]?.state || (isRouterModeCustom(appName) ? rawState : null)
+  return rawState?.__MICRO_APP_STATE__?.[appName]?.state || null
+}
+
+// get micro app router info state form origin state
+export function getMicroRouterInfoState (appName: string): MicroRouterInfoState | null {
+  const rawState = globalEnv.rawWindow.history.state
+  return rawState?.__MICRO_APP_STATE__?.[appName] || null
 }
 
 const ENC_AD_RE = /&/g // %M1
@@ -106,7 +114,6 @@ function formatQueryAppName (appName: string) {
  * @param appName app.name
  */
 export function getMicroPathFromURL (appName: string): string | null {
-  if (isRouterModePure(appName)) return null
   const rawLocation = globalEnv.rawWindow.location
   const rawState = globalEnv.rawWindow.history.state
   if (isRouterModeSearch(appName)) {
@@ -114,10 +121,27 @@ export function getMicroPathFromURL (appName: string): string | null {
     const microPath = queryObject.hashQuery?.[formatQueryAppName(appName)] || queryObject.searchQuery?.[formatQueryAppName(appName)]
     return isString(microPath) ? decodeMicroPath(microPath) : null
   }
-  if (isRouterModeState(appName)) {
-    return rawState?.__MICRO_APP_STATE__?.[appName]?.fullPath || null
-  }
-  return rawLocation.pathname + rawLocation.search + rawLocation.hash
+  /**
+   * Get fullPath from __MICRO_APP_STATE__
+   * NOTE:
+   *  1. state mode: all base on __MICRO_APP_STATE__
+   *  2. pure mode: navigate by location.xxx may contain one-time information in __MICRO_APP_STATE__
+   *  3. native mode: vue-router@4 will exec replaceState with history.state before pushState, like:
+   *    history.replaceState(
+   *      assign({}, history.state, {...}),
+   *      title,
+   *      history.state.current, <---
+   *    )
+   *    when base app jump to another page from child page, it will replace child path with base app path
+   *   e.g: base-home --> child-home --> child-about(will replace with child-home before jump to base-home) --> base-home, when go back, it will back to child-home not child-about
+   *   So we take the fullPath as standard
+   */
+  // 问题：1、同一个页面多个子应用，一个修改后... --- native模式不支持多个子应用同时渲染，多个子应用推荐使用其它模式
+  // if (isRouterModeCustom(appName)) {
+  //   return rawLocation.pathname + rawLocation.search + rawLocation.hash
+  // }
+  // return rawState?.__MICRO_APP_STATE__?.[appName]?.fullPath || null
+  return rawState?.__MICRO_APP_STATE__?.[appName]?.fullPath || (isRouterModeCustom(appName) ? rawLocation.pathname + rawLocation.search + rawLocation.hash : null)
 }
 
 /**
@@ -168,7 +192,7 @@ export function setMicroPathToURL (appName: string, targetLocation: MicroLocatio
     }
   }
 
-  if (isRouterModeState(appName)) {
+  if (isRouterModeState(appName) || isRouterModePure(appName)) {
     targetFullPath = rawLocation.pathname + rawLocation.search + rawLocation.hash
   }
 

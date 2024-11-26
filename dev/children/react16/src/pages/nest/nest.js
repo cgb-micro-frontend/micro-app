@@ -27,10 +27,11 @@ function Vue2 () {
       {
         showLoading && <Spin />
       }
-      <micro-app-sub
+      <micro-app-react16
         name='nest'
         url={`${config.vue2}micro-app/vue2/`}
         data={data}
+        router-mode='state'
         // onBeforemount={() => hideLoading(false)}
         onMounted={() => hideLoading(false)}
         // shadowDOM
@@ -38,7 +39,7 @@ function Vue2 () {
         inline
         // disableScopecss
         // disableSandbox
-        iframe
+        // iframe
       />
       <img src={logo} className="App-logo" alt="logo" width='100' />
     </div>

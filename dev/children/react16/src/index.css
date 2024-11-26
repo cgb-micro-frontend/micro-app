@@ -56,5 +56,46 @@ code {
 }
 
 .test-back-var {
-  background-color: rgb(255 255 255 / var(--opacity));
+  background-color: rgb(255 255 255 / var(--opacity));;;;
+}
+
+/* @layer规则 */
+@layer theme, layout, utilities;
+
+.test-layer {
+  background-color: red;
+}
+
+@layer utilities {
+  .padding-sm {
+    padding: 0.5rem;
+  }
+
+  .padding-lg {
+    padding: 0.8rem;
+  }
+}
+
+@layer framework {
+  @layer layout {
+    .test-layer {
+      .test-layer-nest {
+        color: red;
+      }
+    }
+  }
+}
+
+// 错误1
+.basic-layout-side-menu{.ant-menu-item-group{&:last-child{border-bottom:none!important}}}
+
+// 错误2
+.chat-message-markdown-wrap{table{width:100%!important;border:1px solid #ccc}table td,table th{border-bottom:1px solid #ccc;border-right:1px solid #ccc;padding:5px 10px}table th{text-align:center;background:#dee8ee}table th:last-child{border-right:none}table td:last-child{border-right:none}table tr:last-child td{border-bottom:none}tr:nth-child(2n){background:#eff3f5}blockquote{display:block;border-left:8px solid #d0e5f2;padding:5px 10px;margin:10px 0;line-height:1.4;font-size:100%;background-color:#f1f1f1}ul,ol{margin:10px 0 10px 20px}}
+
+.nest-a {
+  .nest-b {
+    .nest-c {
+      color: red;
+    }
+  }
 }

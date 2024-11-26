@@ -1,4 +1,5 @@
 import type {
+  Func,
   microAppWindowType,
   WithSandBoxInterface,
   plugins,
@@ -33,6 +34,7 @@ import {
   rawHasOwnProperty,
   pureCreateElement,
   assign,
+  isFunction,
 } from '../../libs/utils'
 import {
   patchDocument,
@@ -100,7 +102,7 @@ export default class WithSandBox extends BaseSandbox implements WithSandBoxInter
   public microAppWindow = new CustomWindow() as MicroAppWindowType // Proxy target
 
   constructor (appName: string, url: string) {
-    super()
+    super(appName, url)
     this.patchWith((resolve: CallableFunction) => {
       // get scopeProperties and escapeProperties from plugins
       this.getSpecialProperties(appName)
@@ -205,6 +207,7 @@ export default class WithSandBox extends BaseSandbox implements WithSandBoxInter
      *  1. injectedKeys and escapeKeys must be placed at the back
      *  2. if key in initial microAppWindow, and then rewrite, this key will be delete from microAppWindow when stop, and lost when restart
      *  3. umd mode will not delete global keys
+     *  4. mount & unmount hook should delete in default mode when stop
      */
     if (!umdMode || destroy) {
       clearMicroEventSource(this.microAppWindow.__MICRO_APP_NAME__)
@@ -218,6 +221,8 @@ export default class WithSandBox extends BaseSandbox implements WithSandBoxInter
         Reflect.deleteProperty(globalEnv.rawWindow, key)
       })
       this.escapeKeys.clear()
+
+      this.clearHijackUmdHooks()
     }
 
     if (--globalEnv.activeSandbox === 0) {
@@ -260,6 +265,7 @@ export default class WithSandBox extends BaseSandbox implements WithSandBoxInter
     microAppWindow.microApp = assign(new EventCenterForMicroApp(appName), {
       removeDomScope,
       pureCreateElement,
+      location: microAppWindow.location,
       router,
     })
   }
@@ -593,10 +599,55 @@ export default class WithSandBox extends BaseSandbox implements WithSandBoxInter
    * action before exec scripts when mount
    * Actions:
    * 1. patch static elements from html
+   * 2. hijack umd hooks -- mount, unmount, micro-app-appName
    * @param container micro app container
    */
-  public actionBeforeExecScripts (container: Element | ShadowRoot): void {
+  public actionsBeforeExecScripts (container: Element | ShadowRoot, handleUmdHooks: Func): void {
     this.patchStaticElement(container)
+    this.clearHijackUmdHooks = this.hijackUmdHooks(this.appName, this.microAppWindow, handleUmdHooks)
+  }
+
+  // hijack mount, unmount, micro-app-appName hook to microAppWindow
+  private hijackUmdHooks (
+    appName: string,
+    microAppWindow: microAppWindowType,
+    handleUmdHooks: Func,
+  ): () => void {
+    let mount: Func | null, unmount: Func | null, microAppLibrary: Record<string, unknown> | null
+    rawDefineProperties(microAppWindow, {
+      mount: {
+        configurable: true,
+        get: () => mount,
+        set: (value) => {
+          if (this.active && isFunction(value) && !mount) {
+            handleUmdHooks(mount = value, unmount)
+          }
+        }
+      },
+      unmount: {
+        configurable: true,
+        get: () => unmount,
+        set: (value) => {
+          if (this.active && isFunction(value) && !unmount) {
+            handleUmdHooks(mount, unmount = value)
+          }
+        }
+      },
+      [`micro-app-${appName}`]: {
+        configurable: true,
+        get: () => microAppLibrary,
+        set: (value) => {
+          if (this.active && isPlainObject(value) && !microAppLibrary) {
+            microAppLibrary = value
+            handleUmdHooks(microAppLibrary.mount, microAppLibrary.unmount)
+          }
+        }
+      }
+    })
+
+    return () => {
+      mount = unmount = microAppLibrary = null
+    }
   }
 
   public setStaticAppState (state: string): void {

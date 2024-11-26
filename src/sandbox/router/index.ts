@@ -73,6 +73,9 @@ export function initRouteStateWithURL (
   const microPath = getMicroPathFromURL(appName)
   if (microPath) {
     updateMicroLocation(appName, microPath, microLocation, 'auto')
+    if (isRouterModePure(appName)) {
+      removePathFromBrowser(appName)
+    }
   } else {
     updateBrowserURLWithLocation(appName, microLocation, defaultPage)
   }
@@ -121,8 +124,9 @@ export function clearRouteStateFromURL (
     const { pathname, search, hash } = createURL(url)
     updateMicroLocation(appName, pathname + search + hash, microLocation, 'prevent')
   }
-
-  removePathFromBrowser(appName)
+  if (!isRouterModePure(appName)) {
+    removePathFromBrowser(appName)
+  }
 
   clearRouterWhenUnmount(appName)
 }
@@ -132,11 +136,9 @@ export function clearRouteStateFromURL (
  * called on sandbox.stop or hidden of keep-alive app
  */
 export function removePathFromBrowser (appName: string): void {
-  if (!isRouterModePure(appName)) {
-    attachRouteToBrowserURL(
-      appName,
-      removeMicroPathFromURL(appName),
-      removeMicroState(appName, globalEnv.rawWindow.history.state),
-    )
-  }
+  attachRouteToBrowserURL(
+    appName,
+    removeMicroPathFromURL(appName),
+    removeMicroState(appName, globalEnv.rawWindow.history.state),
+  )
 }

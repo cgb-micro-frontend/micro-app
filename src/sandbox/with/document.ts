@@ -16,6 +16,9 @@ import {
 import {
   appInstanceMap,
 } from '../../create_app'
+import {
+  updateElementInfo,
+} from '../adapter'
 
 /**
  * create proxyDocument and MicroDocument, rewrite document of child app
@@ -79,8 +82,7 @@ function createProxyDocument (
     options?: ElementCreationOptions,
   ): HTMLElement {
     const element = rawCreateElement.call(rawDocument, tagName, options)
-    element.__MICRO_APP_NAME__ = appName
-    return element
+    return updateElementInfo(element, appName)
   }
 
   function createElementNS (
@@ -89,8 +91,7 @@ function createProxyDocument (
     options?: string | ElementCreationOptions,
   ): HTMLElement {
     const element = rawCreateElementNS.call(rawDocument, namespaceURI, name, options)
-    element.__MICRO_APP_NAME__ = appName
-    return element
+    return updateElementInfo(element, appName)
   }
 
   /**

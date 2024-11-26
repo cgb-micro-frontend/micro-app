@@ -51,7 +51,6 @@ export enum MicroAppConfig {
   DISABLE_MEMORY_ROUTER = 'disable-memory-router',
   DISABLE_PATCH_REQUEST = 'disable-patch-request',
   KEEP_ROUTER_STATE = 'keep-router-state',
-  HIDDEN_ROUTER = 'hidden-router',
   KEEP_ALIVE = 'keep-alive',
   CLEAR_DATA ='clear-data',
   SSR = 'ssr',
@@ -106,12 +105,12 @@ const BASE_SCOPE_WINDOW_EVENT = [
   'popstate',
   'hashchange',
   'load',
-  'beforeunload',
   'unload',
   'unmount',
   'appstate-change',
   'statechange',
   'mounted',
+  // 'beforeunload', // remove at 2024.5.30 by cangdu
 ]
 
 // bind event of with sandbox
@@ -120,6 +119,7 @@ export const SCOPE_WINDOW_EVENT_OF_WITH = BASE_SCOPE_WINDOW_EVENT
 // bind event of iframe sandbox
 export const SCOPE_WINDOW_EVENT_OF_IFRAME = BASE_SCOPE_WINDOW_EVENT.concat([
   'unhandledrejection',
+  'message'
 ])
 
 // on event bound to child app window
@@ -128,9 +128,9 @@ const BASE_SCOPE_WINDOW_ON_EVENT = [
   'onpopstate',
   'onhashchange',
   'onload',
-  'onbeforeunload',
   'onunload',
   'onerror'
+  // 'onbeforeunload', // remove at 2024.5.30 by cangdu
 ]
 
 // bind on event of with sandbox
